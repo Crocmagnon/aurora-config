@@ -17,7 +17,8 @@ Les dépôts voisins :
 7. [Corriger un problème sur la machine](#corriger-un-problème-sur-la-machine)
 8. [Revenir en arrière](#revenir-en-arrière)
 9. [Tester dans une VM](#tester-dans-une-vm)
-10. [Aide-mémoire](#aide-mémoire)
+10. [ujust](#ujust)
+11. [Aide-mémoire](#aide-mémoire)
 
 ## Le principe
 
@@ -334,6 +335,37 @@ virsh destroy aurora-test; virsh undefine aurora-test --nvram
 sudo rm -f /var/lib/libvirt/images/aurora-test/disk.qcow2
 ```
 
+## ujust
+
+`ujust` est le lanceur de recettes d'Universal Blue : des scripts prêts à l'emploi, livrés dans l'image (`/usr/share/ublue-os/just/`). `ujust` seul affiche la liste ; la plupart des recettes demandent confirmation avant d'agir.
+
+**Utiles pour l'entretien :**
+
+| Commande | Effet |
+|---|---|
+| `ujust update` | met à jour tout de suite : système, Flatpaks, Homebrew (ce que uupd fait seul) |
+| `ujust toggle-updates` | affiche et active ou coupe les mises à jour automatiques (doivent rester actives) |
+| `ujust changelogs` | changements de la dernière image Aurora |
+| `ujust check-local-overrides` | fichiers de `/etc` qui diffèrent de l'image (même rôle que `ostree admin config-diff`, en plus lisible) |
+| `ujust logs-this-boot`, `ujust logs-last-boot` | journal du démarrage courant ou précédent (utile après un plantage) |
+| `ujust device-info` | rassemble les infos de la machine sur un pastebin, pour demander de l'aide |
+| `ujust bios`, `ujust bios-info` | redémarrer dans le BIOS, version du BIOS |
+| `ujust check-idle-power-draw` | consommation au repos (autonomie) |
+| `ujust clean-system` | libère de la place : conteneurs inutilisés, Flatpaks orphelins, caches rpm-ostree et Homebrew (garde le déploiement de secours) |
+
+**À ne pas lancer sur la machine de Claire :**
+
+| Commande | Pourquoi |
+|---|---|
+| `ujust rebase-helper`, `ujust toggle-devmode` | basculent sur une autre image Aurora : le laptop quitterait `aurora-claire` et ses réglages |
+| `ujust toggle-tailscale` | coupe Tailscale, donc mon accès de dépannage |
+| `ujust toggle-tpm2` | déverrouillage LUKS par TPM : écarté (voir [Les choix faits](#les-choix-faits)) |
+| `ujust powerwash` | remise à zéro de la machine |
+| `ujust aurora-cli`, `ujust bbrew`, `ujust install-fonts` | outils et polices via Homebrew, sans intérêt pour Claire (sans danger en revanche) |
+| `ujust enroll-secure-boot-key` | pour les pilotes Nvidia, inutile ici |
+
+Après un `rebase-helper` ou un `toggle-devmode` par erreur : `sudo bootc switch ghcr.io/crocmagnon/aurora-claire:latest`, puis redémarrer.
+
 ## Aide-mémoire
 
 | Je veux… | Commande (sur le laptop) |
@@ -346,4 +378,5 @@ sudo rm -f /var/lib/libvirt/images/aurora-test/disk.qcow2
 | voir ou changer les paramètres du noyau | `rpm-ostree kargs`, `sudo rpm-ostree kargs --append=… / --delete=…` |
 | rendre `/usr` modifiable jusqu'au redémarrage | `sudo bootc usr-overlay` |
 | voir les journaux de mise à jour | `journalctl -u uupd` |
-| lister les commandes Aurora | `ujust` |
+| lister les commandes Aurora | `ujust` (voir [ujust](#ujust)) |
+| voir la dérive de `/etc`, version lisible | `ujust check-local-overrides` |

@@ -64,6 +64,8 @@ Sibling repos, same owner:
 
 - GRUB comes from bootupd's static config, written to `/boot/grub2/grub.cfg` at install (not updated by image upgrades): `timeout_style=menu`, `timeout=1`, then it sources `$prefix/custom.cfg` last. `/boot` is outside the image and mounted rw, so `aurora-config-grub.service` copies `usr/lib/aurora-config/grub-custom.cfg` and the Breeze theme there at every boot (effect at the next boot; files get `boot_t`). The theme (`grub2-breeze-theme`, which installs into `/boot`) is extracted at build with `rpm2cpio` into `/usr/lib/aurora-config/grub-themes/`. It renders under Secure Boot. Its Unifont fonts are ASCII-only: the user chose not to translate the theme. Entry titles (`Aurora (Version: …) (ostree:N)`) come from ostree and stay as is.
 
+- `ujust` recipes live in `/usr/share/ublue-os/just/*.just` (read them there before recommending one). `rebase-helper` and `toggle-devmode` rebase to another Aurora image, leaving `aurora-claire`; `toggle-tailscale` cuts remote access; `toggle-tpm2` contradicts a decision below. `check-local-overrides` diffs `/etc` against `/usr/etc` (drift check).
+
 ## Decisions (do not revisit without the user)
 
 - **Secure Boot on, no hibernation.** Fedora kernels enter lockdown under Secure Boot, which disables hibernation. Suspend only.
