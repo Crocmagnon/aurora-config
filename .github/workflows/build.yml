@@ -9,7 +9,7 @@ on:
       - '.github/renovate.json'
       - 'LICENSE'
   schedule:
-    - cron: '05 3 * * *'  # 3h05 UTC (5h05 à Paris) : image du jour prête le matin
+    - cron: '05 0 * * *'  # 0h05 UTC (1h05 ou 2h05 à Paris) : avant le uupd de 4h du laptop
   push:
     branches:
       - main
