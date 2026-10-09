@@ -1,0 +1,18 @@
+# Installés au démarrage par flatpak-preinstall.service, puis mis à jour par uupd.
+# Une application que Claire désinstalle n'est pas réinstallée.
+[Flatpak Preinstall org.mozilla.firefox]
+Branch=stable
+
+[Flatpak Preinstall com.valvesoftware.Steam]
+Branch=stable
+
+[Flatpak Preinstall org.onlyoffice.desktopeditors]
+Branch=stable
+
+# Gear Lever : intègre l'AppImage pCloud au menu.
+[Flatpak Preinstall it.mijorus.gearlever]
+Branch=stable
+
+# KTailctl : Tailscale dans la zone de notification.
+[Flatpak Preinstall org.fkoehler.KTailctl]
+Branch=stable

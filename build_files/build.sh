@@ -1,27 +1,18 @@
 #!/bin/bash
-
+# Modifications de l'image Aurora. Les fichiers de system_files/ sont copiés tels quels à la racine.
 set -ouex pipefail
 
-# Copy the contents of system_files/ of the git repo to /
-cp -avf "/ctx/system_files"/. /
+cp -avf /ctx/system_files/. /
 
-### Install packages
+# steam-devices : règles udev des manettes, que le Flatpak Steam ne peut pas poser.
+# fuse-libs : FUSE 2, dont l'AppImage pCloud a besoin. hunspell-fr : correcteur orthographique.
+dnf5 install -y steam-devices fuse-libs hunspell-fr
 
-# Packages can be installed from any enabled yum repo on the image.
-# RPMfusion repos are available by default in ublue main images
-# List of rpmfusion packages can be found here:
-# https://mirrors.rpmfusion.org/mirrorlist?path=free/fedora/updates/43/x86_64/repoview/index.html&protocol=https&redirect=1
-
-# this installs a package from fedora repos
-dnf5 install -y tmux
-
-# Use a COPR Example:
-#
-# dnf5 -y copr enable ublue-os/staging
-# dnf5 -y install package
-# Disable COPRs so they don't end up enabled on the final image:
-# dnf5 -y copr disable ublue-os/staging
-
-#### Example for enabling a System Unit File
-
-systemctl enable podman.socket
+# Wallet ouvert à l'autologin avec la passphrase LUKS (même principe que arch-config) :
+# systemd-cryptsetup laisse la passphrase dans le trousseau du noyau, plasmalogin.service en
+# hérite (KeyringMode=inherit, dans system_files), pam_systemd_loadkey la passe à pam_kwallet5.
+# Le fichier PAM vient du paquet : on y insère la ligne au lieu de le copier, et le build
+# échoue si la ligne pam_kwallet5 a disparu.
+pam=$(ls /etc/pam.d/plasmalogin-autologin /usr/lib/pam.d/plasmalogin-autologin 2>/dev/null | head -n1)
+sed -i '0,/^-\?auth.*pam_kwallet5\.so/s//auth        optional    pam_systemd_loadkey.so\n&/' "$pam"
+grep -B1 -A1 pam_systemd_loadkey "$pam"
