@@ -197,18 +197,13 @@ Suivre un build : `gh run watch`. Le relancer sans commit : `gh workflow run bui
 
 ### Construire en local
 
-Plus rapide que GitHub pour mettre au point `build.sh` : une erreur apparaît en une minute. Docker n'a pas buildx ici, et l'ancien builder ne gère pas les `RUN --mount` du Containerfile : on lance donc `build.sh` dans un conteneur Aurora, avec les mêmes chemins qu'en CI.
+Plus rapide que GitHub pour mettre au point `build.sh` : une erreur apparaît en une minute. Il faut Docker avec buildx (paquet `docker-buildx`), car le Containerfile utilise `RUN --mount`.
 
 ```fish
-set ctx (mktemp -d)
-cp -a build_files/. $ctx/; cp -a system_files $ctx/system_files
-docker pull ghcr.io/ublue-os/aurora:stable
-docker rm -f aurora-build; docker run --name aurora-build -v $ctx:/ctx:ro ghcr.io/ublue-os/aurora:stable /ctx/build.sh
-docker commit aurora-build localhost/aurora-claire; docker rm aurora-build
-docker run --rm localhost/aurora-claire bootc container lint
+docker build -f Containerfile -t localhost/aurora-claire .
 ```
 
-Le lint signale en local trois avertissements (caches dnf dans `/var`, `/run/dnf`, journal dnf), que les `--mount` du vrai build évitent. Ils sont sans conséquence.
+Le `bootc container lint` du Containerfile tourne aussi. Le premier build télécharge l'image Aurora (plusieurs Go) ; les suivants la réutilisent. Pour repartir de la dernière Aurora : `docker pull ghcr.io/ublue-os/aurora:stable` avant le build.
 
 Pour inspecter l'image : `docker run --rm -it localhost/aurora-claire bash`.
 
