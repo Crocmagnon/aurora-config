@@ -1,0 +1,16 @@
+# /boot ne fait pas partie de l'image : on y recopie notre réglage du menu GRUB et son thème à
+# chaque démarrage.
+# Il prend effet au démarrage suivant.
+[Unit]
+Description=Réglage du menu de démarrage (aurora-config)
+RequiresMountsFor=/boot
+ConditionPathIsDirectory=/boot/grub2
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mkdir -p /boot/grub2/themes
+ExecStart=/usr/bin/cp -r --no-preserve=all /usr/lib/aurora-config/grub-themes/. /boot/grub2/themes/
+ExecStart=/usr/bin/cp --no-preserve=all /usr/lib/aurora-config/grub-custom.cfg /boot/grub2/custom.cfg
+
+[Install]
+WantedBy=multi-user.target

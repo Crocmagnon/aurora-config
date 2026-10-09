@@ -78,12 +78,12 @@ Aurora n'a ni Discover ni le Firefox en RPM : la boutique est Bazaar, Firefox es
 |---|---|---|
 | Autologin de `claire` | `system_files/usr/lib/plasmalogin/plasmalogin.conf.d/autologin.conf` | une seule saisie au démarrage : la passphrase LUKS |
 | Wallet KDE ouvert par la passphrase LUKS | `build_files/build.sh` (PAM), `system_files/usr/lib/systemd/system/plasmalogin.service.d/keyring.conf` | sans ça, l'autologin laisse le wallet fermé et chaque application (Wi-Fi, pCloud…) le redemande |
-| AZERTY à l'invite LUKS | `system_files/usr/lib/bootc/kargs.d/10-clavier.toml` | l'initramfs d'Aurora est générique et ne lit pas `/etc/vconsole.conf` |
 | PSR désactivé (`amdgpu.dcdebugmask=0x10`) | `system_files/usr/lib/bootc/kargs.d/10-framework.toml` | repris de `arch-config` (nixos-hardware) |
 | Blacklist de l'audio ACP | `system_files/usr/lib/modprobe.d/framework-acp.conf` | le BIOS déclare à tort ce périphérique : interface audio fantôme (repris de `arch-config`) |
 | `steam-devices` | `build.sh` | règles udev des manettes, que le Flatpak Steam ne peut pas poser |
 | `fuse-libs` | `build.sh` | FUSE 2, nécessaire à l'AppImage pCloud |
 | `hunspell-fr` | `build.sh` | correcteur orthographique des applications KDE |
+| Menu de démarrage visible 5 s, avec le thème Breeze de KDE | `system_files/usr/lib/aurora-config/grub-custom.cfg`, `system_files/usr/lib/systemd/system/aurora-config-grub.service`, `build.sh` (thème) | par défaut, le menu GRUB ne reste qu'une seconde, en texte brut. `/boot` ne fait pas partie de l'image : le service y recopie le réglage et le thème à chaque démarrage, effet au démarrage suivant |
 | Flatpaks préinstallés : Firefox, Steam, OnlyOffice, Gear Lever, KTailctl | `system_files/usr/share/flatpak/preinstall.d/claire.preinstall` | installés au démarrage par `flatpak-preinstall.service` ; une application que Claire désinstalle n'est pas réinstallée |
 
 Déjà fournis par Aurora, sans rien à faire ici : Tailscale (`tailscaled` activé), uupd, plasma-login-manager, power-profiles, fwupd, codecs.
@@ -113,7 +113,7 @@ Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appe
 
 ## Au quotidien
 
-**Claire** utilise KDE. Elle installe ses applications depuis Bazaar, et tout se met à jour sans rien lui demander. Les mises à jour de l'OS s'appliquent quand elle éteint ou redémarre. La seule chose à lui apprendre : si un jour le laptop démarre mal, choisir la deuxième ligne du menu de démarrage et m'appeler.
+**Claire** utilise KDE. Elle installe ses applications depuis Bazaar, et tout se met à jour sans rien lui demander. Les mises à jour de l'OS s'appliquent quand elle éteint ou redémarre. La seule chose à lui apprendre : si un jour le laptop démarre mal, choisir la deuxième ligne du menu de démarrage (il reste affiché 5 secondes) et m'appeler. Les deux lignes s'appellent « Aurora (Version: …) (ostree:0) » et « (ostree:1) » : ostree génère ces titres, on ne peut pas les renommer proprement.
 
 **Moi** :
 - un e-mail de GitHub si le build de la nuit échoue (la cause est presque toujours en amont : relancer le lendemain ou corriger `build.sh`) ;
@@ -134,7 +134,8 @@ Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appe
    - passphrase : lettres, chiffres et symboles courants, sans AltGr (les variantes d'AZERTY ne diffèrent que là). Vérifier avec l'icône en forme d'œil qu'elle s'affiche comme prévu.
 
    L'installation se fait depuis l'image embarquée dans l'ISO, sans réseau. L'indicateur reste immobile pendant l'écriture (une dizaine de Go) : c'est normal.
-4. Premier démarrage, écran bleu MOK : « Enroll MOK », mot de passe `universalblue`. Cela enregistre la clé Secure Boot d'Universal Blue.
+4. Premier démarrage, écran bleu MOK : « Enroll MOK », mot de passe `universalblue`. Cela enregistre la clé Secure Boot d'Universal Blue. **Cet écran est toujours en QWERTY** : sur un clavier AZERTY, taper `universqlblue`.
+   L'invite LUKS, elle, suit déjà le clavier choisi dans l'installeur.
 5. Assistant de premier démarrage : compte `claire`, nom affiché « Claire », administrateur, avec **la passphrase LUKS comme mot de passe**. L'installeur ne crée aucun compte.
 
 ### 2. Passage sur cette image
@@ -163,7 +164,7 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
 ### 4. Contrôles
 
 - `rpm-ostree status` : image `aurora-claire`, aucun paquet ajouté localement.
-- `rpm-ostree kargs` contient `amdgpu.dcdebugmask=0x10` et `vconsole.keymap=fr`.
+- `rpm-ostree kargs` contient `amdgpu.dcdebugmask=0x10`, et `vconsole.keymap=fr-oss` (posé par l'installeur).
 - Redémarrer : une passphrase en AZERTY, puis le bureau sans autre saisie.
 - Wallet ouvert à l'autologin : la commande suivante répond `b false` :
   ```sh
@@ -291,7 +292,7 @@ virt-manager --connect qemu:///system --show-domain-console aurora-test
 
 Puis suivre [Installer la machine](#installer-la-machine). Dans la VM, tester :
 - la passphrase à l'invite LUKS avec des lettres qui changent de place entre QWERTY et AZERTY (a, q, z, w, m) ;
-- l'autologin et le wallet ouvert ;
+- l'autologin et le wallet ouvert (vérifié le 09/10/2026) ;
 - les Flatpaks préinstallés ;
 - un `bootc rollback`.
 

@@ -24,6 +24,7 @@ Sibling repos, same owner:
 | `Containerfile` | `FROM aurora:stable` (no digest, on purpose), runs `build.sh`, then `bootc container lint` |
 | `build_files/build.sh` | Copies `system_files/` to `/` (owned by root), installs packages, patches the PAM autologin file |
 | `system_files/` | Copied as-is to the image root |
+| `system_files/usr/lib/aurora-config/` | Our own files that are not config of another package (GRUB `custom.cfg`; the GRUB theme is added there at build) |
 | `image-template.env` | `IMAGE_NAME=aurora-claire` (differs from the repo name so more images can be added) |
 | `Justfile` | Template's build recipes, used by CI. Left as upstream to ease template merges |
 | `disk_config/` | Unused (ISO builds were removed); kept because `Justfile` references it |
@@ -47,12 +48,21 @@ Sibling repos, same owner:
 - Display manager is **plasma-login-manager** (`plasmalogin.service`), same as `arch-config`.
 - Preset-enabled: `tailscaled.service`, `uupd.timer`, `flatpak-preinstall.service`. Flatpak's `preinstall.d` is supported; Aurora itself ships `bazaar.preinstall`.
 - Removed on purpose: `plasma-discover`, the `firefox` RPM, `fedora-flathub-remote`. The store is Bazaar; Firefox is a Flatpak.
-- The initramfs is generic, built at image build time: it does not read the machine's `/etc/vconsole.conf`, hence `vconsole.keymap=fr` in `kargs.d`.
+- The initramfs is generic, built at image build time: it does not read the machine's `/etc/vconsole.conf`. The installer compensates by adding the chosen keymap as a karg (`vconsole.keymap=fr-oss`), so we ship none.
 - ublue LUKS dracut config adds `fido2 pkcs11 pcsc`.
 - PAM files live in `/usr/lib/pam.d/` (no copy in `/etc/pam.d/`). Fedora's `plasmalogin-autologin` calls `pam_kwallet5` only in the `session` phase; `plasmalogin` (password login) also calls it in `auth`. `build.sh` therefore inserts `pam_systemd_loadkey` then `-auth pam_kwallet5` before `auth include postlogin`. `pam_systemd_loadkey.so` and `pam_kwallet5.so` (package `pam-kwallet`) are both present.
 - plasma-login-manager reads `/usr/lib/plasmalogin/plasmalogin.conf.d/` (shipped empty by the package) and `/etc/plasmalogin.conf.d/`; `/etc/plasmalogin.conf` is all comments. Autologin session file is `/usr/share/wayland-sessions/plasma.desktop` (`Session=plasma`).
-- The Aurora ISO (`aurora-stable-webui-x86_64.iso`, 7 GB, version 44.20260908 on 2026-10-09) installs offline from its embedded image (no network traffic during « Installation des logiciels »); the deployed system then tracks `ghcr.io/ublue-os/aurora:stable`. The installer lets you pick the keyboard (default `fr (oss)`, same letters and digits as `fr`) but creates no user: the account is created by a first-boot wizard. Default partitioning: `/boot/efi`, `/boot` ext4 (clear), one LUKS btrfs partition with `/`, `/home`, `/var` subvolumes; swap is zram.
+- The Aurora ISO (`aurora-stable-webui-x86_64.iso`, 7 GB, version 44.20260908 on 2026-10-09) installs offline from its embedded image (no network traffic during « Installation des logiciels »); the deployed system then tracks `ghcr.io/ublue-os/aurora:stable`. The MOK enrollment screen is always QWERTY (type `universqlblue` on AZERTY). The first LUKS prompt, before switching to our image, already follows the installer's keyboard choice (verified 2026-10-09 with an AZERTY-sensitive passphrase). The installer lets you pick the keyboard (default `fr (oss)`, same letters and digits as `fr`) but creates no user: the account is created by a first-boot wizard. Default partitioning: `/boot/efi`, `/boot` ext4 (clear), one LUKS btrfs partition with `/`, `/home`, `/var` subvolumes; swap is zram.
 - `fuse-libs` is already in Aurora; `steam-devices` and `hunspell-fr` come from Fedora repos. Kept explicit in `build.sh` to document why they matter.
+
+## Verified in the VM (2026-10-09)
+
+- Autologin works from `/usr/lib/plasmalogin/plasmalogin.conf.d/autologin.conf`.
+- The wallet unlocks at autologin with the LUKS passphrase under Fedora's dracut initramfs and SELinux: the PAM audit line lists `pam_systemd_loadkey` among grantors, `pam_kwallet5` runs in `auth`, `plasma-kwallet-pam.service` starts, and the Secret Service `Locked` property is `false` on a wallet created earlier with the user's password.
+- `claire.preinstall` installs its five Flatpaks on the first boot after the switch (`flatpak-preinstall.service`), on top of the Flatpaks the ISO installs.
+- `bootc switch` to the local registry image works; the upstream deployment stays as rollback.
+
+- GRUB comes from bootupd's static config, written to `/boot/grub2/grub.cfg` at install (not updated by image upgrades): `timeout_style=menu`, `timeout=1`, then it sources `$prefix/custom.cfg` last. `/boot` is outside the image and mounted rw, so `aurora-config-grub.service` copies `usr/lib/aurora-config/grub-custom.cfg` and the Breeze theme there at every boot (effect at the next boot; files get `boot_t`). The theme (`grub2-breeze-theme`, which installs into `/boot`) is extracted at build with `rpm2cpio` into `/usr/lib/aurora-config/grub-themes/`. It renders under Secure Boot. Its Unifont fonts are ASCII-only: the user chose not to translate the theme. Entry titles (`Aurora (Version: …) (ostree:N)`) come from ostree and stay as is.
 
 ## Decisions (do not revisit without the user)
 
@@ -64,12 +74,7 @@ Sibling repos, same owner:
 
 ## Not yet verified (check in the VM, then on the laptop)
 
-- That plasmalogin honours autologin from `/usr/lib/plasmalogin/plasmalogin.conf.d/` (inferred from the package's empty dir, by analogy with SDDM's system config dir). If not, move it back to `system_files/etc/plasmalogin.conf.d/`.
-- That SELinux lets `plasmalogin` read the `cryptsetup` key from the kernel keyring (Arch has no SELinux). Check `sudo ausearch -m avc -ts boot` if the wallet stays locked.
-- That the wallet actually unlocks at autologin with Fedora's dracut initramfs (proven only with mkinitcpio on Arch). Check: `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/kdewallet org.freedesktop.Secret.Collection Locked` → `b false`.
-- That `vconsole.keymap=fr` gives AZERTY at the LUKS prompt (generic dracut should include all keymaps). Test with a passphrase containing a, q, z, w, m.
-- That the first LUKS prompt (before the switch, upstream image) is AZERTY.
-- That `claire.preinstall` installs the five Flatpaks on first boot after the switch.
+- On real hardware: PSR karg, ACP blacklist, suspend, fingerprint, `steam-devices` with a controller.
 
 Move each item to the facts or rules above once checked, with the date.
 

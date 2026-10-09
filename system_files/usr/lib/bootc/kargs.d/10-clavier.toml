@@ -1,2 +1,0 @@
-# AZERTY à l'invite LUKS : l'initramfs d'Aurora est générique et ne lit pas /etc/vconsole.conf.
-kargs = ["vconsole.keymap=fr"]
