@@ -13,7 +13,8 @@ Sibling repos, same owner:
 ## How it ships
 
 - `.github/workflows/build.yml` builds on every push to `main`, nightly (00:05 UTC, before the laptop's 04:00-local uupd run; GitHub may delay scheduled runs) and on pull requests. PRs build but never publish. Changes touching only `*.md`, `.github/renovate.json` or `LICENSE` trigger nothing (`paths-ignore`, a YAML anchor shared by `push` and `pull_request`): keep that list to files that never reach the image.
-- On `main`, it pushes `ghcr.io/crocmagnon/aurora-claire:latest` and signs it with cosign (secret `SIGNING_SECRET`; public key `cosign.pub`).
+- On `main`, it pushes `ghcr.io/crocmagnon/aurora-claire:latest` and signs it with cosign (secret `SIGNING_SECRET`; public key `system_files/usr/lib/pki/containers/aurora-claire.pub`). The laptop enforces that signature once switched with `--enforce-container-sigpolicy`: `build.sh` adds a `sigstoreSigned` entry to `/etc/containers/policy.json`, `etc/containers/registries.d/aurora-claire.yaml` enables sigstore attachments (same scheme as Aurora's `ublue-os`). Key rotation: add the new key to `keyPaths` and ship it before switching the secret (README « Signature »).
+- **GitHub disables scheduled workflows after 60 days without repository activity** (public repo). Decision: document only (README « Au quotidien »), no keepalive; revisit if it becomes a chore.
 - The laptop runs `bootc switch`ed to that image. uupd stages updates; they apply at next reboot.
 - **A push to `main` is a deployment to Claire's laptop.** Prefer a branch + PR, and never push to `main` without the user's go.
 
@@ -27,14 +28,14 @@ Sibling repos, same owner:
 | `system_files/usr/lib/aurora-config/` | Our own files that are not config of another package (GRUB `custom.cfg`; the GRUB theme is added there at build) |
 | `image-template.env` | `IMAGE_NAME=aurora-claire` (differs from the repo name so more images can be added) |
 | `Justfile` | Template's build recipes, used by CI. Left as upstream to ease template merges |
-| `disk_config/` | Unused (ISO builds were removed); kept because `Justfile` references it |
+| `disk_config/disk.toml` | Unused (ISO builds were removed); kept because `Justfile` references it. The template's `iso-*.toml` were deleted (dead, and their kickstart switched to `image-template`) |
 | `.github/renovate.json` | Renovate, same style as the user's other repos (`config:recommended`, monthly). Only the `github-actions` manager: the Dockerfile manager would pin `FROM aurora:stable` to a digest and freeze the base. Dependabot was removed |
 
 ## Rules
 
-- **Put config under `/usr/lib` (or `/usr/share`) rather than `/etc`.** `/etc` gets a three-way merge: a locally modified file masks the image forever. Use `system_files/etc/` only when the software reads nothing under `/usr` (none today).
+- **Put config under `/usr/lib` (or `/usr/share`) rather than `/etc`.** `/etc` gets a three-way merge: a locally modified file masks the image forever. Use `system_files/etc/` only when the software reads nothing under `/usr`: today `etc/containers/registries.d/` and `etc/xdg/autostart/` (Plasma reads system autostart only from `/etc/xdg`).
 - **Kernel args go in `system_files/usr/lib/bootc/kargs.d/*.toml`**, one file per topic. bootc applies them on switch and upgrade.
-- **Patch package-owned files in `build.sh` instead of copying them**, and make the build fail if the anchor disappears (see the PAM `sed` + `grep`). A copied file would silently drift from Fedora's.
+- **Patch package-owned files in `build.sh` instead of copying them**, and make the build fail if the anchor disappears or if an overriding file appears (see the PAM `sed` + `grep` + `! test -e /etc/pam.d/…`, and the `policy.json` `jq` + `jq -e`). A copied file would silently drift from Fedora's.
 - **Cite the origin** in a comment when a setting comes from `arch-config` or nixos-hardware.
 - **Changing dracut config requires regenerating the initramfs in `build.sh`.** Aurora builds it in `build_scripts/base/19-initramfs.sh` (ublue-os/aurora): copy that command, including its os-release handling.
 - **Secrets never go in the image or the repo in clear.** If one must be versioned, use git-crypt. The cosign private key exists only as the GitHub secret; regenerate rather than store it.
@@ -53,6 +54,8 @@ Sibling repos, same owner:
 - PAM files live in `/usr/lib/pam.d/` (no copy in `/etc/pam.d/`). Fedora's `plasmalogin-autologin` calls `pam_kwallet5` only in the `session` phase; `plasmalogin` (password login) also calls it in `auth`. `build.sh` therefore inserts `pam_systemd_loadkey` then `-auth pam_kwallet5` before `auth include postlogin`. `pam_systemd_loadkey.so` and `pam_kwallet5.so` (package `pam-kwallet`) are both present.
 - plasma-login-manager reads `/usr/lib/plasmalogin/plasmalogin.conf.d/` (shipped empty by the package) and `/etc/plasmalogin.conf.d/`; `/etc/plasmalogin.conf` is all comments. Autologin session file is `/usr/share/wayland-sessions/plasma.desktop` (`Session=plasma`).
 - The Aurora ISO (`aurora-stable-webui-x86_64.iso`, 7 GB, version 44.20260908 on 2026-10-09) installs offline from its embedded image (no network traffic during « Installation des logiciels »); the deployed system then tracks `ghcr.io/ublue-os/aurora:stable`. The MOK enrollment screen is always QWERTY (type `universqlblue` on AZERTY). The first LUKS prompt, before switching to our image, already follows the installer's keyboard choice (verified 2026-10-09 with an AZERTY-sensitive passphrase). The installer lets you pick the keyboard (default `fr (oss)`, same letters and digits as `fr`) but creates no user: the account is created by a first-boot wizard. Default partitioning: `/boot/efi`, `/boot` ext4 (clear), one LUKS btrfs partition with `/`, `/home`, `/var` subvolumes; swap is zram.
+- Power profiles come from `tuned` + `tuned-ppd` (not `power-profiles-daemon`). `glibc-all-langpacks` and KDE translations are present.
+- With a locally layered package, the deployment becomes « incompatible » for bootc: uupd falls back to rpm-ostree by itself (`BootcCompatible` in uupd's `drv/system/system.go`), but a manual `bootc upgrade` would fail. Docs say `ujust update` / `rpm-ostree upgrade` during hacks.
 - `fuse-libs` is already in Aurora; `steam-devices` and `hunspell-fr` come from Fedora repos. Kept explicit in `build.sh` to document why they matter.
 
 ## Verified in the VM (2026-10-09)
@@ -79,7 +82,8 @@ Sibling repos, same owner:
 
 ## Not yet verified (check in the VM, then on the laptop)
 
-- On real hardware: PSR karg, ACP blacklist, suspend, fingerprint, `steam-devices` with a controller.
+- On real hardware: PSR karg, ACP blacklist, suspend, fingerprint, `steam-devices` with a controller, PowerDevil's critical-battery action without hibernation (expected: shutdown).
+- Whether `ttf-ms-fonts`-style fonts matter for OnlyOffice document fidelity (the Flatpak bundles its own fonts; not checked).
 
 Move each item to the facts or rules above once checked, with the date.
 

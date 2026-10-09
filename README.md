@@ -11,7 +11,7 @@ Les dépôts voisins :
 1. [Le principe](#le-principe)
 2. [Ce que l'image ajoute à Aurora](#ce-que-limage-ajoute-à-aurora)
 3. [Les choix faits](#les-choix-faits)
-4. [Au quotidien](#au-quotidien)
+4. [Au quotidien](#au-quotidien) (et [changer le mot de passe de Claire](#changer-le-mot-de-passe-de-claire))
 5. [Installer la machine](#installer-la-machine)
 6. [Modifier l'image](#modifier-limage)
 7. [Corriger un problème sur la machine](#corriger-un-problème-sur-la-machine)
@@ -78,7 +78,7 @@ redémarrage suivant                 nouvelle image, l'ancienne reste disponible
 Si une condition manque, il n'installe rien cette fois-là. Si le service échoue (Wi-Fi pas encore connecté au réveil, par exemple), systemd le relance au bout d'une minute, trois fois au plus en 10 minutes ; sinon, ce sera au prochain déclenchement.
 
 **Ce qu'il met à jour**, dans l'ordre :
-1. **le système** : `bootc upgrade` télécharge notre image si elle a changé et prépare le nouveau déploiement. Rien ne change avant le redémarrage suivant, et uupd ne redémarre jamais tout seul ;
+1. **le système** : `bootc upgrade` (ou `rpm-ostree upgrade` si des paquets ont été ajoutés localement) télécharge notre image si elle a changé et prépare le nouveau déploiement. Rien ne change avant le redémarrage suivant, et uupd ne redémarre jamais tout seul ;
 2. **les Flatpaks** (système et utilisateur), appliqués tout de suite ; une application ouverte passe à la nouvelle version à sa prochaine ouverture ;
 3. **Homebrew**, s'il est utilisé.
 
@@ -113,12 +113,14 @@ Aurora n'a ni Discover ni le Firefox en RPM : la boutique est Bazaar, Firefox es
 | PSR désactivé (`amdgpu.dcdebugmask=0x10`) | `system_files/usr/lib/bootc/kargs.d/10-framework.toml` | repris de `arch-config` (nixos-hardware) |
 | Blacklist de l'audio ACP | `system_files/usr/lib/modprobe.d/framework-acp.conf` | le BIOS déclare à tort ce périphérique : interface audio fantôme (repris de `arch-config`) |
 | `steam-devices` | `build.sh` | règles udev des manettes, que le Flatpak Steam ne peut pas poser |
-| `fuse-libs` | `build.sh` | FUSE 2, nécessaire à l'AppImage pCloud |
+| `fuse-libs` | `build.sh` | FUSE 2, nécessaire à l'AppImage pCloud. Déjà dans Aurora : déclaré pour le garantir |
 | `hunspell-fr` | `build.sh` | correcteur orthographique des applications KDE |
 | Menu de démarrage visible 5 s, avec le thème Breeze de KDE | `system_files/usr/lib/aurora-config/grub-custom.cfg`, `system_files/usr/lib/systemd/system/aurora-config-grub.service`, `build.sh` (thème) | par défaut, le menu GRUB ne reste qu'une seconde, en texte brut. `/boot` ne fait pas partie de l'image : le service y recopie le réglage et le thème à chaque démarrage, effet au démarrage suivant |
 | Flatpaks préinstallés : Firefox, Steam, OnlyOffice, Gear Lever, KTailctl | `system_files/usr/share/flatpak/preinstall.d/claire.preinstall` | installés au démarrage par `flatpak-preinstall.service` ; une application que Claire désinstalle n'est pas réinstallée |
+| KTailctl lancé à l'ouverture de session | `system_files/etc/xdg/autostart/org.fkoehler.KTailctl.desktop` | Tailscale visible dans la zone de notification. Plasma ne lit l'autostart système que dans `/etc/xdg`. Sans effet si le Flatpak est désinstallé |
+| Signature de l'image vérifiée par le laptop | `system_files/usr/lib/pki/containers/aurora-claire.pub`, `system_files/etc/containers/registries.d/aurora-claire.yaml`, `build.sh` (`policy.json`) | une image qui ne vient pas de notre build est refusée (voir [Signature](#signature)) |
 
-Déjà fournis par Aurora, sans rien à faire ici : Tailscale (`tailscaled` activé), uupd, plasma-login-manager, power-profiles, fwupd, codecs.
+Déjà fournis par Aurora, sans rien à faire ici : Tailscale (`tailscaled` activé), uupd, plasma-login-manager, profils d'énergie (`tuned-ppd`), fwupd, codecs, langues (`glibc-all-langpacks`, traductions KDE).
 
 ### Le wallet ouvert par la passphrase LUKS
 
@@ -129,16 +131,18 @@ Même méthode que dans `arch-config` (Arch Wiki, *KDE Wallet*) :
 
 Condition : **le mot de passe de `claire` est la passphrase LUKS**. C'est aussi plus simple pour elle : un seul secret, saisi au démarrage et à l'écran de verrouillage.
 
-Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appelle `pam_kwallet5` qu'en phase `session`, alors que celui de la connexion par mot de passe l'appelle aussi en phase `auth`. `build.sh` ajoute donc les deux lignes `auth` avant `auth include postlogin`, au lieu de remplacer le fichier : les mises à jour de Fedora continuent de s'appliquer, et le build échoue si la ligne d'ancrage disparaît.
+Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appelle `pam_kwallet5` qu'en phase `session`, alors que celui de la connexion par mot de passe l'appelle aussi en phase `auth`. `build.sh` ajoute donc les deux lignes `auth` avant `auth include postlogin`, au lieu de remplacer le fichier : les mises à jour de Fedora continuent de s'appliquer, et le build échoue si la ligne d'ancrage disparaît, ou si un fichier du même nom apparaît dans `/etc/pam.d` (il aurait priorité et rendrait le correctif inopérant).
+
+Si Claire change son mot de passe, voir [Changer le mot de passe de Claire](#changer-le-mot-de-passe-de-claire) : la passphrase LUKS et le wallet ne suivent pas tout seuls.
 
 ## Les choix faits
 
 - **Aurora plutôt qu'Ubuntu, Kinoite ou NixOS.** Image immuable, mises à jour atomiques, retour arrière natif, Flatpak pour Claire, et tout le système décrit dans un dépôt : pas de dérive possible sur `/usr`. Ubuntu + Ansible ne garantit que ce qui est déclaré. Kinoite demanderait de refaire ce qu'Aurora fournit. NixOS coûte plus cher à entretenir.
 - **Aurora plutôt que Bazzite.** Bazzite vise le jeu. Pour du jeu occasionnel, le Flatpak Steam suffit. Si ça change, il suffit de changer le `FROM`.
-- **Secure Boot activé, pas d'hibernation.** Avec Secure Boot, le noyau Fedora passe en lockdown, qui interdit l'hibernation. Veille simple : à batterie critique, Plasma éteint proprement. L'hibernation de mon laptop sous Arch avait en plus un blocage pas encore compris (voir `panic-on-hang` dans `arch-config`).
+- **Secure Boot activé, pas d'hibernation.** Avec Secure Boot, le noyau Fedora passe en lockdown, qui interdit l'hibernation. Veille simple : à batterie critique, Plasma devrait éteindre proprement (à vérifier sur le laptop). L'hibernation de mon laptop sous Arch avait en plus un blocage pas encore compris (voir `panic-on-hang` dans `arch-config`).
 - **Claire administratrice, plus un compte administrateur pour moi.** Sans droits d'administration, chaque installation depuis Bazaar, mise à jour de firmware ou imprimante demanderait mon mot de passe. Le risque est faible : `/usr` est en lecture seule et le rollback rattrape une erreur système. Mon compte `gaugendre` (créé à la main, une fois) me sert à dépanner avec mon propre mot de passe : celui de Claire reste à elle.
 - **Passphrase LUKS, pas de déverrouillage par TPM.** Avec l'autologin, un TPM seul ouvrirait la session de Claire à qui allume le laptop.
-- **Image non figée** (`FROM aurora:stable` sans digest). Le build de chaque nuit reprend ainsi la dernière Aurora. C'est pour ça que Renovate est retiré du template : il aurait figé la base.
+- **Image non figée** (`FROM aurora:stable` sans digest). Le build de chaque nuit reprend ainsi la dernière Aurora. C'est pour ça que Renovate ne gère pas le Containerfile (voir plus bas).
 - **Dépôt public.** Le laptop télécharge l'image sans identifiants, et rien dans l'image n'est secret.
 - **Pas de sauvegarde des réglages.** Fichiers dans pCloud (dossiers synchronisés), navigateur par Firefox Sync, jeux par Steam Cloud. Les réglages KDE se refont en un quart d'heure.
 - **Renovate pour les actions GitHub seulement** (comme dans mes autres dépôts, une fois par mois). Il ne touche pas au Containerfile : il figerait la base sur un digest.
@@ -150,8 +154,23 @@ Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appe
 
 **Moi** :
 - un e-mail de GitHub si le build de la nuit échoue (la cause est presque toujours en amont : relancer le lendemain ou corriger `build.sh`) ;
-- de temps en temps, `rpm-ostree status` via Tailscale SSH, pour vérifier qu'elle a redémarré récemment et qu'aucune bidouille locale ne traîne ;
+- de temps en temps, via Tailscale SSH : `rpm-ostree status` (elle a redémarré récemment, aucune bidouille locale ne traîne) et `uupd is-img-outdated` (code de sortie 77 si l'image démarrée a plus d'un mois) ;
 - les dépannages, avec la méthode décrite plus bas.
+
+**Le build de la nuit s'arrête après 60 jours sans activité sur le dépôt.** C'est une règle de GitHub pour les dépôts publics, et un système qui tourne n'a aucune raison d'être modifié. GitHub envoie un e-mail avant de le désactiver. Pour le relancer : `gh workflow enable build.yml`, puis `gh workflow run build.yml`. En attendant, le laptop fonctionne normalement et ses Flatpaks continuent de se mettre à jour, mais le système ne suit plus Aurora. Si ça devient pénible, un « keepalive » automatique est possible.
+
+### Changer le mot de passe de Claire
+
+Son mot de passe de session, la passphrase LUKS et le mot de passe du wallet doivent rester identiques : c'est ce qui permet une seule saisie au démarrage. Changer l'un ne change pas les autres. Les trois, ensemble :
+
+```sh
+sudo cryptsetup luksChangeKey "$(sudo blkid -t TYPE=crypto_LUKS -o device)"   # ancienne, puis nouvelle passphrase
+sudo passwd claire
+```
+
+Puis, dans la session de Claire : KWalletManager → `kdewallet` → Changer le mot de passe.
+
+Désynchronisés, rien ne casse : l'autologin passe quand même, mais le wallet reste fermé et redemande son mot de passe, et l'écran de verrouillage attend le mot de passe de session.
 
 ## Installer la machine
 
@@ -180,6 +199,14 @@ systemctl reboot
 
 Au redémarrage : `rpm-ostree status` doit montrer `ghcr.io/crocmagnon/aurora-claire:latest` comme image démarrée.
 
+Puis activer la vérification de la signature. Ce second `switch` vers la même image n'est possible qu'une fois démarré dessus, car c'est elle qui apporte la clé et la politique :
+
+```sh
+sudo bootc switch --enforce-container-sigpolicy ghcr.io/crocmagnon/aurora-claire:latest
+```
+
+`rpm-ostree status` affiche alors `ostree-image-signed:docker://ghcr.io/crocmagnon/aurora-claire:latest`.
+
 ### 3. Réglages manuels, une seule fois
 
 Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent aux mises à jour, mais ne peuvent pas venir de l'image.
@@ -198,7 +225,7 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
   - `--accept-routes`, `--accept-dns` : routes et DNS du tailnet, comme sur mes machines.
 
   Puis, dans la console d'administration Tailscale, **désactiver l'expiration de la clé** de cette machine. Sinon, l'accès disparaît au bout de 180 jours.
-- **KTailctl au démarrage**, dans la session de Claire : Configuration du système → Démarrage automatique → Ajouter… → Ajouter une application → KTailctl. Puis, dans KTailctl → Paramètres, cocher « Démarrer réduit » : il se lance dans la zone de notification, sans fenêtre. KTailctl n'a pas d'option de lancement au démarrage, et le Flatpak ne lit pas de config dans `/etc/xdg` : d'où ce réglage manuel plutôt que dans l'image.
+- **KTailctl réduit** : l'image le lance à l'ouverture de session. Dans KTailctl → Paramètres, cocher « Démarrer réduit » : il se lance alors dans la zone de notification, sans fenêtre. Ce réglage vit dans le dossier de Claire, d'où l'étape manuelle.
 - **pCloud** : télécharger l'AppImage sur pcloud.com, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session. Puis synchroniser `~/Documents`, `~/Images` et `~/Bureau` : ses fichiers sont sauvegardés sans qu'elle ait à y penser. pCloud se met à jour lui-même, pas par uupd.
 - **Comptes** : Steam, Firefox Sync.
 - **Empreinte digitale** (si elle veut) : Configuration du système, Utilisateurs.
@@ -206,7 +233,7 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
 
 ### 4. Contrôles
 
-- `rpm-ostree status` : image `aurora-claire`, aucun paquet ajouté localement.
+- `rpm-ostree status` : image `ostree-image-signed:…aurora-claire`, aucun paquet ajouté localement.
 - `rpm-ostree kargs` contient `amdgpu.dcdebugmask=0x10`, et `vconsole.keymap=fr-oss` (posé par l'installeur).
 - Redémarrer : une passphrase en AZERTY, puis le bureau sans autre saisie.
 - Wallet ouvert à l'autologin : la commande suivante répond `b false` :
@@ -214,6 +241,8 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
   busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/kdewallet org.freedesktop.Secret.Collection Locked
   ```
 - `flatpak list --app` : Firefox, Steam, OnlyOffice, Gear Lever, KTailctl.
+- `systemctl is-failed aurora-config-grub.service` répond `inactive` (pas `failed`), et le menu de démarrage reste 5 s.
+- Depuis une autre machine du tailnet : `ssh gaugendre@<nom-tailscale>`, puis `sudo -i`.
 
 ## Modifier l'image
 
@@ -225,11 +254,15 @@ system_files/                   copié tel quel à la racine de l'image
   usr/lib/modprobe.d/           modules du noyau
   usr/lib/systemd/system/       unités et drop-ins systemd
   usr/lib/plasmalogin/plasmalogin.conf.d/   configuration de l'écran de connexion
+  usr/lib/aurora-config/        nos fichiers à nous : custom.cfg de GRUB (le thème y est ajouté au build)
+  usr/lib/pki/containers/       clé publique de signature de l'image
   usr/share/flatpak/preinstall.d/   Flatpaks préinstallés
-  etc/                          seulement si le logiciel ne lit rien sous /usr
+  etc/                          seulement si le logiciel ne lit rien sous /usr :
+    containers/registries.d/      où trouver les signatures
+    xdg/autostart/                lancement à l'ouverture de session
 image-template.env              nom et description de l'image
 .github/workflows/build.yml     build, publication, signature
-cosign.pub                      clé publique de signature
+.github/renovate.json           mises à jour des actions GitHub
 ```
 
 Règles :
@@ -259,9 +292,15 @@ Pour une deuxième machine : un Containerfile par image (ex. `Containerfile.gab`
 
 ### Signature
 
-GitHub Actions signe chaque image avec cosign. La clé privée n'existe que dans le secret `SIGNING_SECRET` du dépôt. Pour la changer : `COSIGN_PASSWORD="" cosign generate-key-pair`, `gh secret set SIGNING_SECRET < cosign.key`, remplacer `cosign.pub`, effacer `cosign.key`. Un secret à versionner passerait par git-crypt.
+GitHub Actions signe chaque image avec cosign. La clé privée n'existe que dans le secret `SIGNING_SECRET` du dépôt ; la clé publique est `system_files/usr/lib/pki/containers/aurora-claire.pub`. Un secret à versionner passerait par git-crypt.
 
-Le laptop ne vérifie pas encore la signature (il faudrait une politique dans `/etc/containers/policy.json`).
+Le laptop vérifie la signature, comme Aurora le fait pour ses propres images : `build.sh` ajoute à `/etc/containers/policy.json` une entrée `sigstoreSigned` pour `ghcr.io/crocmagnon/aurora-claire`, et `registries.d/aurora-claire.yaml` indique où trouver les signatures. La vérification est active une fois le laptop basculé avec `--enforce-container-sigpolicy` (voir [Passage sur cette image](#2-passage-sur-cette-image)). Une image mal signée est refusée : le laptop reste sur l'image actuelle, rien ne casse.
+
+**Changer de clé** sans bloquer les mises à jour, en deux temps :
+1. `COSIGN_PASSWORD="" cosign generate-key-pair`, ajouter la nouvelle clé publique à côté de l'ancienne (`aurora-claire-2.pub`) et dans `keyPaths` (`build.sh`), publier, et attendre que le laptop ait appliqué cette image ;
+2. `gh secret set SIGNING_SECRET < cosign.key`, effacer `cosign.key`, puis retirer l'ancienne clé publique.
+
+Dans l'ordre inverse, le laptop refuserait la première image signée avec la nouvelle clé.
 
 ## Corriger un problème sur la machine
 
@@ -280,9 +319,11 @@ Via Tailscale SSH, avec mon compte (`ssh gaugendre@<nom-tailscale>`), `sudo` ave
 
 Les mises à jour continuent : les bidouilles persistantes sont rejouées par-dessus chaque nouvelle image. On peut donc laisser Claire utiliser la machine quelques jours pour voir si le correctif tient.
 
+Avec un paquet ajouté, le déploiement n'est plus géré par bootc mais par rpm-ostree : uupd s'en charge tout seul, mais pour une mise à jour à la main, utiliser `ujust update` (ou `sudo rpm-ostree upgrade`), pas `sudo bootc upgrade`.
+
 ### 2. Reporter dans l'image
 
-Voir [Modifier l'image](#modifier-limage). Pull request, merge, puis attendre que le laptop applique l'image (ou `sudo bootc upgrade` puis redémarrer).
+Voir [Modifier l'image](#modifier-limage). Pull request, merge, puis attendre que le laptop applique l'image (ou `ujust update` puis redémarrer).
 
 ### 3. Nettoyer et vérifier
 
@@ -291,17 +332,21 @@ sudo rpm-ostree reset                  # retire paquets ajoutés et overrides lo
 sudo rpm-ostree kargs --delete=<karg>  # si le karg est maintenant dans kargs.d
 sudo ostree admin config-diff          # tout ce qui diffère de l'image dans /etc
 rpm-ostree status                      # aucun « LayeredPackages » ni « LocalPackages »
+rpm-ostree kargs                       # rien d'autre que kargs.d, LUKS et l'installeur
+ls /usr/local/bin /usr/local/lib       # /usr/local est sous /var : hors image
+brew list                              # outils Homebrew, si j'en ai installé
 ```
 
 Pour remettre un fichier de `/etc` à la version de l'image : le copier depuis `/usr/etc/`.
 
-Seules la dérive de `/etc` et les paquets ajoutés sont possibles : ces commandes les montrent entièrement.
+`/usr` ne peut pas dériver. Le reste peut : `/etc`, les paquets ajoutés, les paramètres du noyau, et ce qui vit dans `/var` (`/usr/local`, Homebrew, Flatpaks). Ces commandes en font le tour.
 
 ## Revenir en arrière
 
 - **À distance** : `sudo bootc rollback`, puis redémarrer. Le déploiement précédent redevient le défaut.
 - **Sur place** : au démarrage, choisir la deuxième entrée du menu.
 - **Garder une version sûre** : `sudo ostree admin pin 0` épingle le déploiement courant (il ne sera pas supprimé par les mises à jour). `sudo ostree admin pin --unpin <n>` pour le libérer.
+- **Figer une version connue bonne** : chaque build publie aussi un tag daté. `sudo bootc switch --enforce-container-sigpolicy ghcr.io/crocmagnon/aurora-claire:20261009` y reste, **sans plus aucune mise à jour du système** tant qu'on ne revient pas sur `:latest`. Tags disponibles : `skopeo list-tags docker://ghcr.io/crocmagnon/aurora-claire`.
 - **Revenir à Aurora d'origine** : `sudo bootc switch ghcr.io/ublue-os/aurora:stable`.
 
 ## Tester dans une VM
@@ -337,7 +382,9 @@ Puis suivre [Installer la machine](#installer-la-machine). Dans la VM, tester :
 - la passphrase à l'invite LUKS avec des lettres qui changent de place entre QWERTY et AZERTY (a, q, z, w, m) ;
 - l'autologin et le wallet ouvert (vérifié le 09/10/2026) ;
 - les Flatpaks préinstallés ;
-- un `bootc rollback`.
+- un `bootc rollback` ;
+- la vérification de signature (`--enforce-container-sigpolicy`, voir l'installation) ;
+- le dépannage : compte `gaugendre`, `tailscale up`, puis `ssh gaugendre@<nom-tailscale>` et `sudo -i` depuis l'hôte.
 
 Ce qui ne se teste pas en VM : le matériel du Framework (PSR, audio, empreinte, veille).
 
@@ -407,7 +454,7 @@ Après un `rebase-helper` ou un `toggle-devmode` par erreur : `sudo bootc switch
 | Je veux… | Commande (sur le laptop) |
 |---|---|
 | voir l'image et les déploiements | `rpm-ostree status` ou `sudo bootc status` |
-| forcer la mise à jour maintenant | `sudo bootc upgrade` puis redémarrer (ou `ujust update`) |
+| forcer la mise à jour maintenant | `ujust update` puis redémarrer (`sudo bootc upgrade` seulement sans paquet ajouté) |
 | revenir à l'image précédente | `sudo bootc rollback` puis redémarrer |
 | voir la dérive de `/etc` | `sudo ostree admin config-diff` |
 | retirer les paquets ajoutés localement | `sudo rpm-ostree reset` |
@@ -417,3 +464,4 @@ Après un `rebase-helper` ou un `toggle-devmode` par erreur : `sudo bootc switch
 | prochaine mise à jour automatique | `systemctl list-timers uupd.timer` |
 | lister les commandes Aurora | `ujust` (voir [ujust](#ujust)) |
 | voir la dérive de `/etc`, version lisible | `ujust check-local-overrides` |
+| l'image démarrée a-t-elle plus d'un mois ? | `uupd is-img-outdated` (code 77 si oui) |

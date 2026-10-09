@@ -1,0 +1,4 @@
+# Signatures cosign de notre image, publiées à côté d'elle sur ghcr (comme ublue-os.yaml).
+docker:
+  ghcr.io/crocmagnon/aurora-claire:
+    use-sigstore-attachments: true

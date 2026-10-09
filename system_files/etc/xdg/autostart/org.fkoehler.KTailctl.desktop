@@ -1,0 +1,10 @@
+# KTailctl (Flatpak préinstallé) au démarrage de la session. Plasma ne lit l'autostart système que
+# dans /etc/xdg. TryExec : rien ne se passe si le Flatpak a été désinstallé.
+# « Démarrer réduit » reste à cocher dans KTailctl (sa config vit dans le dossier de l'utilisateur).
+[Desktop Entry]
+Type=Application
+Name=KTailctl
+Icon=org.fkoehler.KTailctl
+TryExec=/var/lib/flatpak/exports/bin/org.fkoehler.KTailctl
+Exec=/var/lib/flatpak/exports/bin/org.fkoehler.KTailctl
+X-Flatpak=org.fkoehler.KTailctl
