@@ -5,7 +5,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: '05 10 * * *'  # 10:05am UTC everyday
+    - cron: '05 3 * * *'  # 3h05 UTC (5h05 à Paris) : image du jour prête le matin
   push:
     branches:
       - main

@@ -40,7 +40,7 @@ ghcr.io/ublue-os/aurora:stable      reconstruite régulièrement par Universal B
         │
         ▼
 ce dépôt, GitHub Actions             FROM aurora:stable + nos réglages
-  (chaque nuit à 10h05 UTC,          → build, signature cosign
+  (chaque nuit à 3h05 UTC,           → build, signature cosign
    et à chaque push sur main)
         │
         ▼

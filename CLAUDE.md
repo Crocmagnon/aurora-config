@@ -12,7 +12,7 @@ Sibling repos, same owner:
 
 ## How it ships
 
-- `.github/workflows/build.yml` builds on every push to `main`, nightly (10:05 UTC) and on pull requests. PRs build but never publish.
+- `.github/workflows/build.yml` builds on every push to `main`, nightly (03:05 UTC; GitHub may delay scheduled runs) and on pull requests. PRs build but never publish.
 - On `main`, it pushes `ghcr.io/crocmagnon/aurora-claire:latest` and signs it with cosign (secret `SIGNING_SECRET`; public key `cosign.pub`).
 - The laptop runs `bootc switch`ed to that image. uupd stages updates; they apply at next reboot.
 - **A push to `main` is a deployment to Claire's laptop.** Prefer a branch + PR, and never push to `main` without the user's go.
