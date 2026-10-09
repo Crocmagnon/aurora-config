@@ -73,6 +73,7 @@ Sibling repos, same owner:
 - **LUKS passphrase, no TPM unlock.** With autologin, TPM-only would hand the session to whoever powers the laptop on.
 - **Autologin + wallet unlocked by the LUKS passphrase** (`pam_systemd_loadkey` + `KeyringMode=inherit`, the `arch-config` method). Requires Claire's user password to equal the LUKS passphrase.
 - **Claire is an admin (`wheel`)**, so Bazaar, fwupd and printers never ask for someone else's password. **Gabriel has his own admin account `gaugendre`**, created manually after install (`useradd -m -G wheel`), used over Tailscale SSH with his own password; Claire's password (= LUKS passphrase) stays hers. Not created by the image on purpose.
+- **Tailscale** is brought up manually with the same flags as `arch-config` (`--operator=claire --ssh --accept-routes --accept-dns`), logged into Gabriel's tailnet account. `--operator` takes a single user: Claire, for KTailctl; Gabriel uses `sudo` from `gaugendre`.
 - **No settings backup.** Files sync to pCloud; Firefox Sync; Steam Cloud.
 - Settings from `arch-config` deliberately **not** carried over: KVM USB wakeup (his desk), Limine font, pstore/panic-on-hang debugging, hibernation hooks, ufw/Docker/exit-node config.
 

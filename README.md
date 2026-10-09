@@ -189,10 +189,14 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
   sudo useradd -m -G wheel gaugendre && sudo passwd gaugendre
   ```
   Il n'apparaît pas au démarrage (autologin), seulement dans « Changer d'utilisateur ».
-- **Tailscale**, pour que je puisse dépanner :
+- **Tailscale**, pour que je puisse dépanner. Mêmes options que sur mes machines (`arch-config`), connecté avec **mon** compte Tailscale :
   ```sh
-  sudo tailscale up --ssh --operator=claire
+  sudo tailscale up --operator=claire --ssh --accept-routes --accept-dns
   ```
+  - `--operator=claire` : Claire pilote Tailscale sans `sudo`, ce qu'il faut à KTailctl. Un seul opérateur possible : moi, j'utilise `sudo tailscale …` depuis mon compte administrateur ;
+  - `--ssh` : tailscaled sert lui-même SSH, sans serveur SSH sur la machine. Les règles `ssh` du tailnet doivent autoriser l'utilisateur `gaugendre` sur cette machine (la règle par défaut, `autogroup:self` vers `autogroup:nonroot`, le permet si la machine est enregistrée sur mon compte) ;
+  - `--accept-routes`, `--accept-dns` : routes et DNS du tailnet, comme sur mes machines.
+
   Puis, dans la console d'administration Tailscale, **désactiver l'expiration de la clé** de cette machine. Sinon, l'accès disparaît au bout de 180 jours.
 - **pCloud** : télécharger l'AppImage sur pcloud.com, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session. Puis synchroniser `~/Documents`, `~/Images` et `~/Bureau` : ses fichiers sont sauvegardés sans qu'elle ait à y penser. pCloud se met à jour lui-même, pas par uupd.
 - **Comptes** : Steam, Firefox Sync.
