@@ -4,7 +4,7 @@ Guidance for Claude Code in this repository. Keep it and `README.md` current: up
 
 ## What this is
 
-A bootc image for Claire's Framework 13 AMD (Ryzen AI 300): `FROM ghcr.io/ublue-os/aurora:stable` (Fedora Atomic, KDE Plasma) plus a few settings. Claire is not technical: she only uses the desktop and the Bazaar store. The user (Gabriel) administers the machine remotely over Tailscale SSH.
+A bootc image for Claire's Framework 13 AMD (Ryzen AI 300): `FROM ghcr.io/ublue-os/aurora:stable` (Fedora Atomic, KDE Plasma) plus a few settings. Claire is not technical: she only uses the desktop and the Bazaar store. The user (Gabriel) administers the machine remotely over Tailscale SSH, with his own admin account `gaugendre`.
 
 Sibling repos, same owner:
 - `~/Projects/codeberg.org/Crocmagnon/arch-config`: his Arch machines (decman). Framework-specific settings come from there; read its `CLAUDE.md` and `decman/framework_gab_amd.py` before adding hardware tweaks.
@@ -69,6 +69,7 @@ Sibling repos, same owner:
 - **Secure Boot on, no hibernation.** Fedora kernels enter lockdown under Secure Boot, which disables hibernation. Suspend only.
 - **LUKS passphrase, no TPM unlock.** With autologin, TPM-only would hand the session to whoever powers the laptop on.
 - **Autologin + wallet unlocked by the LUKS passphrase** (`pam_systemd_loadkey` + `KeyringMode=inherit`, the `arch-config` method). Requires Claire's user password to equal the LUKS passphrase.
+- **Claire is an admin (`wheel`)**, so Bazaar, fwupd and printers never ask for someone else's password. **Gabriel has his own admin account `gaugendre`**, created manually after install (`useradd -m -G wheel`), used over Tailscale SSH with his own password; Claire's password (= LUKS passphrase) stays hers. Not created by the image on purpose.
 - **No settings backup.** Files sync to pCloud; Firefox Sync; Steam Cloud.
 - Settings from `arch-config` deliberately **not** carried over: KVM USB wakeup (his desk), Limine font, pstore/panic-on-hang debugging, hibernation hooks, ufw/Docker/exit-node config.
 

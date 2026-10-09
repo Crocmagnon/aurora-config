@@ -104,6 +104,7 @@ Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appe
 - **Aurora plutôt qu'Ubuntu, Kinoite ou NixOS.** Image immuable, mises à jour atomiques, retour arrière natif, Flatpak pour Claire, et tout le système décrit dans un dépôt : pas de dérive possible sur `/usr`. Ubuntu + Ansible ne garantit que ce qui est déclaré. Kinoite demanderait de refaire ce qu'Aurora fournit. NixOS coûte plus cher à entretenir.
 - **Aurora plutôt que Bazzite.** Bazzite vise le jeu. Pour du jeu occasionnel, le Flatpak Steam suffit. Si ça change, il suffit de changer le `FROM`.
 - **Secure Boot activé, pas d'hibernation.** Avec Secure Boot, le noyau Fedora passe en lockdown, qui interdit l'hibernation. Veille simple : à batterie critique, Plasma éteint proprement. L'hibernation de mon laptop sous Arch avait en plus un blocage pas encore compris (voir `panic-on-hang` dans `arch-config`).
+- **Claire administratrice, plus un compte administrateur pour moi.** Sans droits d'administration, chaque installation depuis Bazaar, mise à jour de firmware ou imprimante demanderait mon mot de passe. Le risque est faible : `/usr` est en lecture seule et le rollback rattrape une erreur système. Mon compte `gaugendre` (créé à la main, une fois) me sert à dépanner avec mon propre mot de passe : celui de Claire reste à elle.
 - **Passphrase LUKS, pas de déverrouillage par TPM.** Avec l'autologin, un TPM seul ouvrirait la session de Claire à qui allume le laptop.
 - **Image non figée** (`FROM aurora:stable` sans digest). Le build de chaque nuit reprend ainsi la dernière Aurora. C'est pour ça que Renovate est retiré du template : il aurait figé la base.
 - **Dépôt public.** Le laptop télécharge l'image sans identifiants, et rien dans l'image n'est secret.
@@ -151,6 +152,11 @@ Au redémarrage : `rpm-ostree status` doit montrer `ghcr.io/crocmagnon/aurora-cl
 
 Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent aux mises à jour, mais ne peuvent pas venir de l'image.
 
+- **Mon compte administrateur**, pour dépanner sans connaître le mot de passe de Claire (qui est aussi sa passphrase LUKS) :
+  ```sh
+  sudo useradd -m -G wheel gaugendre && sudo passwd gaugendre
+  ```
+  Il n'apparaît pas au démarrage (autologin), seulement dans « Changer d'utilisateur ».
 - **Tailscale**, pour que je puisse dépanner :
   ```sh
   sudo tailscale up --ssh --operator=claire
@@ -226,7 +232,7 @@ On ne sait pas toujours quel est le bon correctif avant de l'avoir essayé. D'o�
 
 ### 1. Essayer sur place
 
-Via Tailscale SSH (`ssh claire@<nom-tailscale>`, ou `tailscale ssh`) :
+Via Tailscale SSH, avec mon compte (`ssh gaugendre@<nom-tailscale>`), `sudo` avec mon mot de passe :
 
 | À essayer | Commande | Durée de vie |
 |---|---|---|
