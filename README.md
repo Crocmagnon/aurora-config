@@ -70,12 +70,12 @@ redémarrage suivant                 nouvelle image, l'ancienne reste disponible
 - chaque jour à **4h00, heure locale**, avec un délai aléatoire de 0 à 15 min ;
 - `Persistent=true` : si le laptop était éteint ou en veille à 4h, la mise à jour part **dès le démarrage ou le réveil suivant**. En pratique, c'est le cas le plus courant.
 
-**À quelles conditions.** Avant de commencer, uupd vérifie que la machine est disponible (`uupd config-dump`, section `checks.hardware`) :
-- batterie à 20 % au moins (sur secteur, pas de condition) ;
+**À quelles conditions.** Avant de commencer, uupd vérifie que la machine est disponible (seuils : `uupd config-dump`, section `checks.hardware` ; logique : `checks/hardware.go` dans le code de uupd) :
+- sur batterie : au moins 20 %, et pas en mode « économie d'énergie » (sur secteur, pas de condition) ;
 - processeur occupé à moins de 50 %, mémoire à moins de 90 % ;
-- réseau peu utilisé (moins de 700 Ko/s) : pas de mise à jour en pleine visio.
+- réseau connecté, **pas marqué comme limité** (partage de connexion du téléphone, par exemple), et peu utilisé (moins de 700 Ko/s en moyenne sur 5 s) : pas de mise à jour en pleine visio.
 
-Si une condition manque, il ne fait rien et attend le lendemain. En cas d'échec (Wi-Fi pas encore connecté au réveil, par exemple), systemd le relance au bout d'une minute, trois fois au plus.
+Si une condition manque, il n'installe rien cette fois-là. Si le service échoue (Wi-Fi pas encore connecté au réveil, par exemple), systemd le relance au bout d'une minute, trois fois au plus en 10 minutes ; sinon, ce sera au prochain déclenchement.
 
 **Ce qu'il met à jour**, dans l'ordre :
 1. **le système** : `bootc upgrade` télécharge notre image si elle a changé et prépare le nouveau déploiement. Rien ne change avant le redémarrage suivant, et uupd ne redémarre jamais tout seul ;
