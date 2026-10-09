@@ -76,7 +76,7 @@ Aurora n'a ni Discover ni le Firefox en RPM : la boutique est Bazaar, Firefox es
 
 | Réglage | Fichier | Pourquoi |
 |---|---|---|
-| Autologin de `claire` | `system_files/etc/plasmalogin.conf.d/autologin.conf` | une seule saisie au démarrage : la passphrase LUKS |
+| Autologin de `claire` | `system_files/usr/lib/plasmalogin/plasmalogin.conf.d/autologin.conf` | une seule saisie au démarrage : la passphrase LUKS |
 | Wallet KDE ouvert par la passphrase LUKS | `build_files/build.sh` (PAM), `system_files/usr/lib/systemd/system/plasmalogin.service.d/keyring.conf` | sans ça, l'autologin laisse le wallet fermé et chaque application (Wi-Fi, pCloud…) le redemande |
 | AZERTY à l'invite LUKS | `system_files/usr/lib/bootc/kargs.d/10-clavier.toml` | l'initramfs d'Aurora est générique et ne lit pas `/etc/vconsole.conf` |
 | PSR désactivé (`amdgpu.dcdebugmask=0x10`) | `system_files/usr/lib/bootc/kargs.d/10-framework.toml` | repris de `arch-config` (nixos-hardware) |
@@ -93,11 +93,11 @@ Déjà fournis par Aurora, sans rien à faire ici : Tailscale (`tailscaled` acti
 Même méthode que dans `arch-config` (Arch Wiki, *KDE Wallet*) :
 1. au démarrage, systemd-cryptsetup déverrouille le disque et laisse la passphrase dans le trousseau du noyau ;
 2. `plasmalogin.service` en hérite grâce à `KeyringMode=inherit` ;
-3. `pam_systemd_loadkey`, inséré avant `pam_kwallet5` dans le fichier PAM d'autologin, la passe à `pam_kwallet5`, qui ouvre le wallet.
+3. dans le fichier PAM d'autologin, `pam_systemd_loadkey` la lit, puis `pam_kwallet5` (phase `auth`) la récupère et ouvre le wallet en phase `session`.
 
 Condition : **le mot de passe de `claire` est la passphrase LUKS**. C'est aussi plus simple pour elle : un seul secret, saisi au démarrage et à l'écran de verrouillage.
 
-Le fichier PAM vient du paquet Fedora : `build.sh` y insère la ligne au lieu de le remplacer, et le build échoue si la ligne `pam_kwallet5` n'y est plus.
+Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appelle `pam_kwallet5` qu'en phase `session`, alors que celui de la connexion par mot de passe l'appelle aussi en phase `auth`. `build.sh` ajoute donc les deux lignes `auth` avant `auth include postlogin`, au lieu de remplacer le fichier : les mises à jour de Fedora continuent de s'appliquer, et le build échoue si la ligne d'ancrage disparaît.
 
 ## Les choix faits
 
@@ -178,6 +178,7 @@ system_files/                   copié tel quel à la racine de l'image
   usr/lib/bootc/kargs.d/        paramètres du noyau (un .toml par sujet)
   usr/lib/modprobe.d/           modules du noyau
   usr/lib/systemd/system/       unités et drop-ins systemd
+  usr/lib/plasmalogin/plasmalogin.conf.d/   configuration de l'écran de connexion
   usr/share/flatpak/preinstall.d/   Flatpaks préinstallés
   etc/                          seulement si le logiciel ne lit rien sous /usr
 image-template.env              nom et description de l'image
@@ -193,6 +194,23 @@ Règles :
 - Une modification de la configuration dracut doit reconstruire l'initramfs dans `build.sh`, comme le fait Aurora (`build_scripts/base/19-initramfs.sh` dans [ublue-os/aurora](https://github.com/ublue-os/aurora)).
 
 Suivre un build : `gh run watch`. Le relancer sans commit : `gh workflow run build.yml`.
+
+### Construire en local
+
+Plus rapide que GitHub pour mettre au point `build.sh` : une erreur apparaît en une minute. Docker n'a pas buildx ici, et l'ancien builder ne gère pas les `RUN --mount` du Containerfile : on lance donc `build.sh` dans un conteneur Aurora, avec les mêmes chemins qu'en CI.
+
+```fish
+set ctx (mktemp -d)
+cp -a build_files/. $ctx/; cp -a system_files $ctx/system_files
+docker pull ghcr.io/ublue-os/aurora:stable
+docker rm -f aurora-build; docker run --name aurora-build -v $ctx:/ctx:ro ghcr.io/ublue-os/aurora:stable /ctx/build.sh
+docker commit aurora-build localhost/aurora-claire; docker rm aurora-build
+docker run --rm localhost/aurora-claire bootc container lint
+```
+
+Le lint signale en local trois avertissements (caches dnf dans `/var`, `/run/dnf`, journal dnf), que les `--mount` du vrai build évitent. Ils sont sans conséquence.
+
+Pour inspecter l'image : `docker run --rm -it localhost/aurora-claire bash`.
 
 ### Ajouter une image
 
@@ -257,10 +275,16 @@ sudo curl -fLO https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso
 sudo curl -fLO https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso-CHECKSUM
 sha256sum -c aurora-stable-webui-x86_64.iso-CHECKSUM
 
+# L'OVMF d'Arch n'a pas les clés Microsoft : sans elles, Secure Boot n'est pas appliqué.
+# On en fait une copie des variables EFI avec les clés enregistrées.
+uvx --from virt-firmware virt-fw-vars --input /usr/share/edk2/x64/OVMF_VARS.4m.fd \
+    --output /tmp/OVMF_VARS.ms.4m.fd --enroll-redhat --secure-boot
+sudo install -m644 /tmp/OVMF_VARS.ms.4m.fd $d/
+
 virsh net-start default   # si le réseau NAT est inactif
 virt-install --name aurora-test --osinfo fedora-unknown \
-    --memory 8192 --vcpus 6 --cpu host-passthrough --machine q35 \
-    --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes,firmware.feature1.name=enrolled-keys,firmware.feature1.enabled=yes \
+    --memory 8192 --vcpus 6 --cpu host-passthrough --machine q35 --features smm.state=on \
+    --boot loader=/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd,loader.readonly=yes,loader.type=pflash,loader.secure=yes,nvram.template=$d/OVMF_VARS.ms.4m.fd \
     --disk path=$d/disk.qcow2,size=64,format=qcow2,bus=virtio,discard=unmap \
     --cdrom $d/aurora-stable-webui-x86_64.iso \
     --network network=default --graphics spice --video virtio \
@@ -276,7 +300,14 @@ Puis suivre [Installer la machine](#installer-la-machine). Dans la VM, tester :
 
 Ce qui ne se teste pas en VM : le matériel du Framework (PSR, audio, empreinte, veille).
 
-Pour tester une modification de l'image avant de la publier : pousser une branche et ouvrir une pull request (le build vérifie que l'image se construit), ou publier temporairement un tag `:testing` et faire `sudo bootc switch ghcr.io/crocmagnon/aurora-claire:testing` dans la VM.
+Pour tester une modification de l'image avant de la publier, [la construire en local](#construire-en-local) puis la copier dans la VM :
+
+```fish
+docker save localhost/aurora-claire | ssh <utilisateur>@<ip-de-la-vm> sudo podman load
+ssh <utilisateur>@<ip-de-la-vm> sudo bootc switch --transport containers-storage localhost/aurora-claire
+```
+
+Revenir ensuite sur l'image publiée : `sudo bootc switch ghcr.io/crocmagnon/aurora-claire:latest`.
 
 Repartir de zéro :
 ```fish

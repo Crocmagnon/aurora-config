@@ -22,7 +22,7 @@ Sibling repos, same owner:
 | Path | Role |
 |---|---|
 | `Containerfile` | `FROM aurora:stable` (no digest, on purpose), runs `build.sh`, then `bootc container lint` |
-| `build_files/build.sh` | Copies `system_files/` to `/`, installs packages, patches the PAM autologin file |
+| `build_files/build.sh` | Copies `system_files/` to `/` (owned by root), installs packages, patches the PAM autologin file |
 | `system_files/` | Copied as-is to the image root |
 | `image-template.env` | `IMAGE_NAME=aurora-claire` (differs from the repo name so more images can be added) |
 | `Justfile` | Template's build recipes, used by CI. Left as upstream to ease template merges |
@@ -30,13 +30,15 @@ Sibling repos, same owner:
 
 ## Rules
 
-- **Put config under `/usr/lib` (or `/usr/share`) rather than `/etc`.** `/etc` gets a three-way merge: a locally modified file masks the image forever. Use `system_files/etc/` only when the software reads nothing under `/usr` (`plasmalogin.conf.d` today).
+- **Put config under `/usr/lib` (or `/usr/share`) rather than `/etc`.** `/etc` gets a three-way merge: a locally modified file masks the image forever. Use `system_files/etc/` only when the software reads nothing under `/usr` (none today).
 - **Kernel args go in `system_files/usr/lib/bootc/kargs.d/*.toml`**, one file per topic. bootc applies them on switch and upgrade.
 - **Patch package-owned files in `build.sh` instead of copying them**, and make the build fail if the anchor disappears (see the PAM `sed` + `grep`). A copied file would silently drift from Fedora's.
 - **Cite the origin** in a comment when a setting comes from `arch-config` or nixos-hardware.
 - **Changing dracut config requires regenerating the initramfs in `build.sh`.** Aurora builds it in `build_scripts/base/19-initramfs.sh` (ublue-os/aurora): copy that command, including its os-release handling.
 - **Secrets never go in the image or the repo in clear.** If one must be versioned, use git-crypt. The cosign private key exists only as the GitHub secret; regenerate rather than store it.
-- **No podman on the user's host, and Docker may be down.** Verify builds in CI (`gh run watch`, `gh run view --log-failed`). To inspect upstream Aurora, read its sources (`gh repo clone ublue-os/aurora`) rather than pulling the multi-GB image.
+- **Build locally before pushing**, with the procedure in `README.md` (« Construire en local »): the host has Docker without buildx and no podman, so `docker build` fails on `RUN --mount`; instead run `build.sh` in an `aurora:stable` container with the build context bind-mounted at `/ctx`, then `docker commit` and `bootc container lint`. The 3 lint warnings about dnf caches are local-only. CI stays the source of truth (`gh run watch`, `gh run view --log-failed`).
+- **Never let `system_files/` ownership leak into the image.** `build.sh` copies with `--no-preserve=ownership`: a plain `cp -a` from a bind mount makes `/etc`, `/usr` and our files owned by uid 1000, which is Claire on the laptop. In CI, `COPY` already gives root, but do not rely on it. Check with `find / -xdev -uid 1000` in the built image.
+- **Inspect upstream Aurora** with `docker run --rm ghcr.io/ublue-os/aurora:stable …` (pulled locally) or its sources (`gh repo clone ublue-os/aurora`).
 - **Comments, docs and commit messages are in French**, like the sibling repos.
 
 ## Facts about upstream Aurora (verified in its sources, October 2026)
@@ -46,6 +48,9 @@ Sibling repos, same owner:
 - Removed on purpose: `plasma-discover`, the `firefox` RPM, `fedora-flathub-remote`. The store is Bazaar; Firefox is a Flatpak.
 - The initramfs is generic, built at image build time: it does not read the machine's `/etc/vconsole.conf`, hence `vconsole.keymap=fr` in `kargs.d`.
 - ublue LUKS dracut config adds `fido2 pkcs11 pcsc`.
+- PAM files live in `/usr/lib/pam.d/` (no copy in `/etc/pam.d/`). Fedora's `plasmalogin-autologin` calls `pam_kwallet5` only in the `session` phase; `plasmalogin` (password login) also calls it in `auth`. `build.sh` therefore inserts `pam_systemd_loadkey` then `-auth pam_kwallet5` before `auth include postlogin`. `pam_systemd_loadkey.so` and `pam_kwallet5.so` (package `pam-kwallet`) are both present.
+- plasma-login-manager reads `/usr/lib/plasmalogin/plasmalogin.conf.d/` (shipped empty by the package) and `/etc/plasmalogin.conf.d/`; `/etc/plasmalogin.conf` is all comments. Autologin session file is `/usr/share/wayland-sessions/plasma.desktop` (`Session=plasma`).
+- `fuse-libs` is already in Aurora; `steam-devices` and `hunspell-fr` come from Fedora repos. Kept explicit in `build.sh` to document why they matter.
 
 ## Decisions (do not revisit without the user)
 
@@ -57,8 +62,8 @@ Sibling repos, same owner:
 
 ## Not yet verified (check in the VM, then on the laptop)
 
-- That the PAM `sed` finds a `pam_kwallet5` auth line in Fedora's `plasmalogin-autologin` (the build fails loudly if not).
-- That `steam-devices`, `fuse-libs`, `hunspell-fr` resolve in Aurora's repos (the build fails if not).
+- That plasmalogin honours autologin from `/usr/lib/plasmalogin/plasmalogin.conf.d/` (inferred from the package's empty dir, by analogy with SDDM's system config dir). If not, move it back to `system_files/etc/plasmalogin.conf.d/`.
+- That SELinux lets `plasmalogin` read the `cryptsetup` key from the kernel keyring (Arch has no SELinux). Check `sudo ausearch -m avc -ts boot` if the wallet stays locked.
 - That the wallet actually unlocks at autologin with Fedora's dracut initramfs (proven only with mkinitcpio on Arch). Check: `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/kdewallet org.freedesktop.Secret.Collection Locked` → `b false`.
 - That `vconsole.keymap=fr` gives AZERTY at the LUKS prompt (generic dracut should include all keymaps). Test with a passphrase containing a, q, z, w, m.
 - Whether the Aurora ISO's installer and first LUKS prompt are QWERTY-only (reported by Aurora testers).
@@ -68,4 +73,4 @@ Move each item to the facts or rules above once checked, with the date.
 
 ## VM bench
 
-VM `aurora-test`, files in `/var/lib/libvirt/images/aurora-test/`, created with the `virt-install` command in `README.md` (UEFI with Secure Boot and Microsoft keys enrolled). The user installs through the virt-manager console; MOK enrollment password is `universalblue`. `arch-config/vm/README.md` documents `virsh send-key` and screenshot tricks that apply here too (keys are physical QWERTY positions).
+VM `aurora-test`, files in `/var/lib/libvirt/images/aurora-test/`, created with the `virt-install` command in `README.md`. Arch's OVMF ships no pre-enrolled keys (Secure Boot would not be enforced), so the README builds `OVMF_VARS.ms.4m.fd` with `virt-fw-vars --enroll-redhat --secure-boot` and passes it as `nvram.template`; `firmware.feature…enrolled-keys=yes` fails on Arch. The `default` NAT network exists but is not autostarted: `virsh net-start default`. The user installs through the virt-manager console; MOK enrollment password is `universalblue`. `arch-config/vm/README.md` documents `virsh send-key` and screenshot tricks that apply here too (keys are physical QWERTY positions).
