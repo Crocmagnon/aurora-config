@@ -198,6 +198,7 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
   - `--accept-routes`, `--accept-dns` : routes et DNS du tailnet, comme sur mes machines.
 
   Puis, dans la console d'administration Tailscale, **désactiver l'expiration de la clé** de cette machine. Sinon, l'accès disparaît au bout de 180 jours.
+- **KTailctl au démarrage**, dans la session de Claire : Configuration du système → Démarrage automatique → Ajouter… → Ajouter une application → KTailctl. Puis, dans KTailctl → Paramètres, cocher « Démarrer réduit » : il se lance dans la zone de notification, sans fenêtre. KTailctl n'a pas d'option de lancement au démarrage, et le Flatpak ne lit pas de config dans `/etc/xdg` : d'où ce réglage manuel plutôt que dans l'image.
 - **pCloud** : télécharger l'AppImage sur pcloud.com, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session. Puis synchroniser `~/Documents`, `~/Images` et `~/Bureau` : ses fichiers sont sauvegardés sans qu'elle ait à y penser. pCloud se met à jour lui-même, pas par uupd.
 - **Comptes** : Steam, Firefox Sync.
 - **Empreinte digitale** (si elle veut) : Configuration du système, Utilisateurs.
