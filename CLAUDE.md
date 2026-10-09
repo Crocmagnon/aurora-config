@@ -27,6 +27,7 @@ Sibling repos, same owner:
 | `image-template.env` | `IMAGE_NAME=aurora-claire` (differs from the repo name so more images can be added) |
 | `Justfile` | Template's build recipes, used by CI. Left as upstream to ease template merges |
 | `disk_config/` | Unused (ISO builds were removed); kept because `Justfile` references it |
+| `.github/renovate.json` | Renovate, same style as the user's other repos (`config:recommended`, monthly). Only the `github-actions` manager: the Dockerfile manager would pin `FROM aurora:stable` to a digest and freeze the base. Dependabot was removed |
 
 ## Rules
 
@@ -50,6 +51,7 @@ Sibling repos, same owner:
 - ublue LUKS dracut config adds `fido2 pkcs11 pcsc`.
 - PAM files live in `/usr/lib/pam.d/` (no copy in `/etc/pam.d/`). Fedora's `plasmalogin-autologin` calls `pam_kwallet5` only in the `session` phase; `plasmalogin` (password login) also calls it in `auth`. `build.sh` therefore inserts `pam_systemd_loadkey` then `-auth pam_kwallet5` before `auth include postlogin`. `pam_systemd_loadkey.so` and `pam_kwallet5.so` (package `pam-kwallet`) are both present.
 - plasma-login-manager reads `/usr/lib/plasmalogin/plasmalogin.conf.d/` (shipped empty by the package) and `/etc/plasmalogin.conf.d/`; `/etc/plasmalogin.conf` is all comments. Autologin session file is `/usr/share/wayland-sessions/plasma.desktop` (`Session=plasma`).
+- The Aurora ISO (`aurora-stable-webui-x86_64.iso`, 7 GB, version 44.20260908 on 2026-10-09) installs offline from its embedded image (no network traffic during « Installation des logiciels »); the deployed system then tracks `ghcr.io/ublue-os/aurora:stable`. The installer lets you pick the keyboard (default `fr (oss)`, same letters and digits as `fr`) but creates no user: the account is created by a first-boot wizard. Default partitioning: `/boot/efi`, `/boot` ext4 (clear), one LUKS btrfs partition with `/`, `/home`, `/var` subvolumes; swap is zram.
 - `fuse-libs` is already in Aurora; `steam-devices` and `hunspell-fr` come from Fedora repos. Kept explicit in `build.sh` to document why they matter.
 
 ## Decisions (do not revisit without the user)
@@ -66,7 +68,7 @@ Sibling repos, same owner:
 - That SELinux lets `plasmalogin` read the `cryptsetup` key from the kernel keyring (Arch has no SELinux). Check `sudo ausearch -m avc -ts boot` if the wallet stays locked.
 - That the wallet actually unlocks at autologin with Fedora's dracut initramfs (proven only with mkinitcpio on Arch). Check: `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/kdewallet org.freedesktop.Secret.Collection Locked` → `b false`.
 - That `vconsole.keymap=fr` gives AZERTY at the LUKS prompt (generic dracut should include all keymaps). Test with a passphrase containing a, q, z, w, m.
-- Whether the Aurora ISO's installer and first LUKS prompt are QWERTY-only (reported by Aurora testers).
+- That the first LUKS prompt (before the switch, upstream image) is AZERTY.
 - That `claire.preinstall` installs the five Flatpaks on first boot after the switch.
 
 Move each item to the facts or rules above once checked, with the date.
@@ -74,3 +76,5 @@ Move each item to the facts or rules above once checked, with the date.
 ## VM bench
 
 VM `aurora-test`, files in `/var/lib/libvirt/images/aurora-test/`, created with the `virt-install` command in `README.md`. Arch's OVMF ships no pre-enrolled keys (Secure Boot would not be enforced), so the README builds `OVMF_VARS.ms.4m.fd` with `virt-fw-vars --enroll-redhat --secure-boot` and passes it as `nvram.template`; `firmware.feature…enrolled-keys=yes` fails on Arch. The `default` NAT network exists but is not autostarted: `virsh net-start default`. The user installs through the virt-manager console; MOK enrollment password is `universalblue`. `arch-config/vm/README.md` documents `virsh send-key` and screenshot tricks that apply here too (keys are physical QWERTY positions).
+
+The VM follows the locally built image through a `registry:2` container on the host (`aurora-registry`, published on `127.0.0.1:5000` and `192.168.122.1:5000`; Docker only pushes over HTTP to `localhost`). The VM marks `192.168.122.1:5000` insecure in `/etc/containers/registries.conf.d/50-banc-de-test.conf`. Iterate with `docker build -f Containerfile -t localhost:5000/aurora-claire . && docker push localhost:5000/aurora-claire`, then `sudo bootc upgrade && systemctl reboot` in the VM.

@@ -108,6 +108,7 @@ Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appe
 - **Image non figée** (`FROM aurora:stable` sans digest). Le build de chaque nuit reprend ainsi la dernière Aurora. C'est pour ça que Renovate est retiré du template : il aurait figé la base.
 - **Dépôt public.** Le laptop télécharge l'image sans identifiants, et rien dans l'image n'est secret.
 - **Pas de sauvegarde des réglages.** Fichiers dans pCloud (dossiers synchronisés), navigateur par Firefox Sync, jeux par Steam Cloud. Les réglages KDE se refont en un quart d'heure.
+- **Renovate pour les actions GitHub seulement** (comme dans mes autres dépôts, une fois par mois). Il ne touche pas au Containerfile : il figerait la base sur un digest.
 - **Nom d'image distinct du nom du dépôt** (`aurora-claire`), pour accueillir d'autres images plus tard (voir [Ajouter une image](#ajouter-une-image)).
 
 ## Au quotidien
@@ -128,12 +129,13 @@ Le fichier d'autologin de Fedora (`/usr/lib/pam.d/plasmalogin-autologin`) n'appe
 1. ISO : <https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso>, avec son `-CHECKSUM` (`sha256sum -c`). Sur une clé USB (pas Ventoy, que les ISO Aurora ne supportent pas).
 2. BIOS du Framework : Secure Boot reste activé.
 3. Dans l'installeur :
-   - langue : français ;
-   - partitionnement automatique, **chiffrement coché** ;
-   - compte `claire`, nom affiché « Claire », administrateur, avec **la passphrase LUKS comme mot de passe**.
+   - langue : français ; clavier : `fr (oss)`, proposé par défaut (mêmes lettres et chiffres que `fr`) ;
+   - partitionnement automatique (`/boot/efi`, `/boot` en clair, puis une partition LUKS en btrfs avec `/`, `/home` et `/var`), **chiffrement coché** ;
+   - passphrase : lettres, chiffres et symboles courants, sans AltGr (les variantes d'AZERTY ne diffèrent que là). Vérifier avec l'icône en forme d'œil qu'elle s'affiche comme prévu.
 
-   L'installeur et l'invite LUKS de l'ISO seraient en QWERTY quoi qu'on choisisse (rapporté par les testeurs d'Aurora, à confirmer en VM). Choisir une passphrase qui se tape pareil en QWERTY et en AZERTY, ou la taper en QWERTY jusqu'au passage sur notre image.
+   L'installation se fait depuis l'image embarquée dans l'ISO, sans réseau. L'indicateur reste immobile pendant l'écriture (une dizaine de Go) : c'est normal.
 4. Premier démarrage, écran bleu MOK : « Enroll MOK », mot de passe `universalblue`. Cela enregistre la clé Secure Boot d'Universal Blue.
+5. Assistant de premier démarrage : compte `claire`, nom affiché « Claire », administrateur, avec **la passphrase LUKS comme mot de passe**. L'installeur ne crée aucun compte.
 
 ### 2. Passage sur cette image
 
@@ -295,11 +297,26 @@ Puis suivre [Installer la machine](#installer-la-machine). Dans la VM, tester :
 
 Ce qui ne se teste pas en VM : le matériel du Framework (PSR, audio, empreinte, veille).
 
-Pour tester une modification de l'image avant de la publier, [la construire en local](#construire-en-local) puis la copier dans la VM :
+Pour tester une modification avant de la publier, la VM suit l'image locale via un petit registre sur l'hôte, joignable seulement depuis l'hôte (`127.0.0.1`) et le réseau des VM (`192.168.122.1`). Docker refuse de pousser en HTTP ailleurs que vers `localhost`, d'où les deux adresses.
 
+Une fois, sur l'hôte :
 ```fish
-docker save localhost/aurora-claire | ssh <utilisateur>@<ip-de-la-vm> sudo podman load
-ssh <utilisateur>@<ip-de-la-vm> sudo bootc switch --transport containers-storage localhost/aurora-claire
+docker run -d --restart=unless-stopped --name aurora-registry \
+    -p 127.0.0.1:5000:5000 -p 192.168.122.1:5000:5000 registry:2
+```
+
+Une fois, dans la VM (après l'installation) :
+```sh
+printf '[[registry]]\nlocation = "192.168.122.1:5000"\ninsecure = true\n' | sudo tee /etc/containers/registries.conf.d/50-banc-de-test.conf
+sudo bootc switch 192.168.122.1:5000/aurora-claire:latest
+```
+
+À chaque itération : sur l'hôte, [construire](#construire-en-local) puis pousser ; dans la VM, mettre à jour. Seules les couches modifiées transitent.
+```fish
+docker build -f Containerfile -t localhost:5000/aurora-claire . && docker push localhost:5000/aurora-claire
+```
+```sh
+sudo bootc upgrade && systemctl reboot
 ```
 
 Revenir ensuite sur l'image publiée : `sudo bootc switch ghcr.io/crocmagnon/aurora-claire:latest`.
