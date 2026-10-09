@@ -1,54 +1,299 @@
 # aurora-config
 
-Image [bootc](https://github.com/bootc-dev/bootc) du Framework 13 AMD (Ryzen AI 300) de Claire : [Aurora](https://getaurora.dev) (Fedora Atomic, KDE Plasma) plus quelques réglages. Construit depuis [ublue-os/image-template](https://github.com/ublue-os/image-template).
+Système du Framework 13 AMD (Ryzen AI 300) de Claire, décrit dans ce dépôt sous forme d'**image bootc** : [Aurora](https://getaurora.dev) (Fedora Atomic avec KDE Plasma) plus quelques réglages. Le dépôt part de [ublue-os/image-template](https://github.com/ublue-os/image-template).
 
-GitHub Actions reconstruit l'image chaque nuit et à chaque push sur `main`, par-dessus la dernière `aurora:stable`, puis la publie signée sur `ghcr.io/crocmagnon/aurora-claire`. Le laptop la télécharge tout seul (uupd) et l'applique au redémarrage suivant. L'image précédente reste dans le menu de démarrage. Un build qui échoue ne publie rien : le laptop garde la dernière image.
+Les dépôts voisins :
+- [`arch-config`](https://codeberg.org/Crocmagnon/arch-config) : mes machines Arch (decman). Les réglages propres au Framework 13 AMD en viennent ;
+- `nixos-config` : srv-1.
 
-Les dépôts voisins : `arch-config` (mes machines Arch, decman) et `nixos-config` (srv-1).
+## Sommaire
+
+1. [Le principe](#le-principe)
+2. [Ce que l'image ajoute à Aurora](#ce-que-limage-ajoute-à-aurora)
+3. [Les choix faits](#les-choix-faits)
+4. [Au quotidien](#au-quotidien)
+5. [Installer la machine](#installer-la-machine)
+6. [Modifier l'image](#modifier-limage)
+7. [Corriger un problème sur la machine](#corriger-un-problème-sur-la-machine)
+8. [Revenir en arrière](#revenir-en-arrière)
+9. [Tester dans une VM](#tester-dans-une-vm)
+10. [Aide-mémoire](#aide-mémoire)
+
+## Le principe
+
+### Un système en image
+
+Sur Aurora, l'OS est une image de conteneur (OCI), démarrée telle quelle. Le disque est découpé en zones aux règles différentes :
+
+| Zone | Contenu | Écriture | À la mise à jour |
+|---|---|---|---|
+| `/usr` | L'OS : programmes, bibliothèques, KDE, unités systemd, udev, polkit… | lecture seule | remplacé en bloc par la nouvelle image |
+| `/etc` | Configuration de la machine | oui | fusion en trois voies : un fichier modifié localement est gardé tel quel, les autres suivent l'image |
+| `/var`, `/home` | Données, Flatpaks, Homebrew, conteneurs | oui | jamais touché |
+
+Un **déploiement**, c'est une image plus son `/etc`. Une mise à jour ne modifie jamais le système qui tourne : elle prépare un nouveau déploiement à côté, qui devient actif au redémarrage. Le précédent reste dans le menu de démarrage.
+
+### Le chemin d'une mise à jour
+
+```
+ghcr.io/ublue-os/aurora:stable      reconstruite régulièrement par Universal Blue
+        │
+        ▼
+ce dépôt, GitHub Actions             FROM aurora:stable + nos réglages
+  (chaque nuit à 10h05 UTC,          → build, signature cosign
+   et à chaque push sur main)
+        │
+        ▼
+ghcr.io/crocmagnon/aurora-claire:latest
+        │
+        ▼
+le laptop, timer uupd               bootc upgrade (prépare le déploiement),
+                                    flatpak update, brew upgrade
+        │
+        ▼
+redémarrage suivant                 nouvelle image, l'ancienne reste disponible
+```
+
+- Le laptop suit **notre** image, pas celle d'Universal Blue. Il reçoit leurs mises à jour au plus tard le lendemain, via notre build de la nuit.
+- **Un build qui échoue ne publie rien** : le laptop garde la dernière image. GitHub envoie un e-mail.
+- Une pull request construit l'image sans la publier : c'est la façon de tester une modification sans l'envoyer au laptop.
+- Les Flatpaks se mettent à jour à part, sans redémarrage.
+- Si Claire ne redémarre jamais, la mise à jour attend. Elle s'applique au prochain redémarrage.
+
+### Où s'installent les applications
+
+| Moyen | Pour quoi | Qui |
+|---|---|---|
+| **Flatpak** (Flathub), depuis la boutique **Bazaar** | toutes les applications de bureau | Claire, seule |
+| **AppImage** via Gear Lever | ce qui n'existe qu'en AppImage (pCloud) | une fois, à l'installation |
+| **Homebrew** | outils en ligne de commande | moi, pour dépanner |
+| **Distrobox** | un conteneur d'une autre distribution intégré au bureau | moi, au besoin |
+| **cette image** (`build.sh`) | ce qui doit faire partie de l'OS : pilotes, règles udev, démons | moi, par commit |
+
+Aurora n'a ni Discover ni le Firefox en RPM : la boutique est Bazaar, Firefox est un Flatpak.
 
 ## Ce que l'image ajoute à Aurora
 
-- **Autologin** de `claire` (`/etc/plasmalogin.conf.d/autologin.conf`), avec le **wallet KDE ouvert par la passphrase LUKS** : `pam_systemd_loadkey` inséré dans le fichier PAM d'autologin (`build.sh`), `KeyringMode=inherit` sur `plasmalogin.service`. Il faut donc que le mot de passe de `claire` soit la passphrase LUKS. Une seule saisie au démarrage, puis la même pour l'écran de verrouillage.
-- **AZERTY à l'invite LUKS** : `vconsole.keymap=fr` (l'initramfs d'Aurora est générique).
-- **Framework 13 AMD** (repris de `arch-config`) : `amdgpu.dcdebugmask=0x10`, blacklist de l'audio ACP fantôme.
-- **Paquets** : `steam-devices` (manettes), `fuse-libs` (AppImage pCloud), `hunspell-fr`.
-- **Flatpaks préinstallés** (`claire.preinstall`) : Firefox, Steam, OnlyOffice, Gear Lever, KTailctl.
+| Réglage | Fichier | Pourquoi |
+|---|---|---|
+| Autologin de `claire` | `system_files/etc/plasmalogin.conf.d/autologin.conf` | une seule saisie au démarrage : la passphrase LUKS |
+| Wallet KDE ouvert par la passphrase LUKS | `build_files/build.sh` (PAM), `system_files/usr/lib/systemd/system/plasmalogin.service.d/keyring.conf` | sans ça, l'autologin laisse le wallet fermé et chaque application (Wi-Fi, pCloud…) le redemande |
+| AZERTY à l'invite LUKS | `system_files/usr/lib/bootc/kargs.d/10-clavier.toml` | l'initramfs d'Aurora est générique et ne lit pas `/etc/vconsole.conf` |
+| PSR désactivé (`amdgpu.dcdebugmask=0x10`) | `system_files/usr/lib/bootc/kargs.d/10-framework.toml` | repris de `arch-config` (nixos-hardware) |
+| Blacklist de l'audio ACP | `system_files/usr/lib/modprobe.d/framework-acp.conf` | le BIOS déclare à tort ce périphérique : interface audio fantôme (repris de `arch-config`) |
+| `steam-devices` | `build.sh` | règles udev des manettes, que le Flatpak Steam ne peut pas poser |
+| `fuse-libs` | `build.sh` | FUSE 2, nécessaire à l'AppImage pCloud |
+| `hunspell-fr` | `build.sh` | correcteur orthographique des applications KDE |
+| Flatpaks préinstallés : Firefox, Steam, OnlyOffice, Gear Lever, KTailctl | `system_files/usr/share/flatpak/preinstall.d/claire.preinstall` | installés au démarrage par `flatpak-preinstall.service` ; une application que Claire désinstalle n'est pas réinstallée |
 
-Pas d'hibernation : avec Secure Boot, le noyau Fedora passe en lockdown, qui l'interdit. Veille simple ; à batterie critique, Plasma éteint proprement.
+Déjà fournis par Aurora, sans rien à faire ici : Tailscale (`tailscaled` activé), uupd, plasma-login-manager, power-profiles, fwupd, codecs.
 
-## Installer
+### Le wallet ouvert par la passphrase LUKS
 
-1. ISO : <https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso>. Secure Boot reste activé.
-2. Installation : langue française, clavier `fr`, partitionnement automatique, **chiffrement coché**. Compte `claire` (nom affiché « Claire »), administrateur, avec la passphrase LUKS comme mot de passe.
-3. Au premier démarrage, écran bleu MOK : « Enroll MOK », mot de passe `universalblue`.
-4. Basculer sur cette image, puis redémarrer :
-   ```sh
-   sudo bootc switch ghcr.io/crocmagnon/aurora-claire:latest
-   ```
+Même méthode que dans `arch-config` (Arch Wiki, *KDE Wallet*) :
+1. au démarrage, systemd-cryptsetup déverrouille le disque et laisse la passphrase dans le trousseau du noyau ;
+2. `plasmalogin.service` en hérite grâce à `KeyringMode=inherit` ;
+3. `pam_systemd_loadkey`, inséré avant `pam_kwallet5` dans le fichier PAM d'autologin, la passe à `pam_kwallet5`, qui ouvre le wallet.
 
-## Après l'installation
+Condition : **le mot de passe de `claire` est la passphrase LUKS**. C'est aussi plus simple pour elle : un seul secret, saisi au démarrage et à l'écran de verrouillage.
 
-- `sudo tailscale up --ssh --operator=claire`, puis dans la console Tailscale : **désactiver l'expiration de la clé** de la machine (sinon l'accès de dépannage disparaît au bout de 180 jours).
-- pCloud : télécharger l'AppImage, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session, et synchroniser `~/Documents`, `~/Images` et `~/Bureau`.
-- Connexions : Steam, Firefox Sync.
-- `fwupdmgr refresh && fwupdmgr update`.
-- Contrôles :
-  - `rpm-ostree status` : l'image démarrée est `ghcr.io/crocmagnon/aurora-claire`.
-  - Wallet ouvert à l'autologin : `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/kdewallet org.freedesktop.Secret.Collection Locked` répond `b false`.
+Le fichier PAM vient du paquet Fedora : `build.sh` y insère la ligne au lieu de le remplacer, et le build échoue si la ligne `pam_kwallet5` n'y est plus.
 
-## Corriger un problème
+## Les choix faits
 
-1. **Sur la machine, via Tailscale SSH**, essayer le correctif :
-   - fichier dans `/usr` : `sudo bootc usr-overlay` (modifiable jusqu'au redémarrage) ;
-   - paquet : `sudo rpm-ostree install --apply-live <paquet>` ;
-   - configuration : directement dans `/etc` ;
-   - paramètre noyau : `sudo rpm-ostree kargs --append=<karg>`.
-2. **Reporter le correctif ici** : de préférence dans `system_files/usr/lib/...` (sysctl.d, modprobe.d, systemd, udev, `bootc/kargs.d`), qui fait autorité ; un fichier de `/etc` modifié localement masquerait l'image pour toujours. Les paquets vont dans `build_files/build.sh`.
-3. **Retirer la bidouille locale** une fois l'image publiée et appliquée : `sudo rpm-ostree reset`, `sudo rpm-ostree kargs --delete=<karg>`, annuler les modifications de `/etc`.
-4. **Vérifier l'absence de dérive** : `rpm-ostree status` (aucun paquet ajouté localement) et `sudo ostree admin config-diff` (fichiers de `/etc` qui diffèrent de l'image).
+- **Aurora plutôt qu'Ubuntu, Kinoite ou NixOS.** Image immuable, mises à jour atomiques, retour arrière natif, Flatpak pour Claire, et tout le système décrit dans un dépôt : pas de dérive possible sur `/usr`. Ubuntu + Ansible ne garantit que ce qui est déclaré. Kinoite demanderait de refaire ce qu'Aurora fournit. NixOS coûte plus cher à entretenir.
+- **Aurora plutôt que Bazzite.** Bazzite vise le jeu. Pour du jeu occasionnel, le Flatpak Steam suffit. Si ça change, il suffit de changer le `FROM`.
+- **Secure Boot activé, pas d'hibernation.** Avec Secure Boot, le noyau Fedora passe en lockdown, qui interdit l'hibernation. Veille simple : à batterie critique, Plasma éteint proprement. L'hibernation de mon laptop sous Arch avait en plus un blocage pas encore compris (voir `panic-on-hang` dans `arch-config`).
+- **Passphrase LUKS, pas de déverrouillage par TPM.** Avec l'autologin, un TPM seul ouvrirait la session de Claire à qui allume le laptop.
+- **Image non figée** (`FROM aurora:stable` sans digest). Le build de chaque nuit reprend ainsi la dernière Aurora. C'est pour ça que Renovate est retiré du template : il aurait figé la base.
+- **Dépôt public.** Le laptop télécharge l'image sans identifiants, et rien dans l'image n'est secret.
+- **Pas de sauvegarde des réglages.** Fichiers dans pCloud (dossiers synchronisés), navigateur par Firefox Sync, jeux par Steam Cloud. Les réglages KDE se refont en un quart d'heure.
+- **Nom d'image distinct du nom du dépôt** (`aurora-claire`), pour accueillir d'autres images plus tard (voir [Ajouter une image](#ajouter-une-image)).
 
-En cas de casse : `sudo bootc rollback` puis redémarrer, ou choisir l'entrée précédente dans le menu de démarrage.
+## Au quotidien
 
-## Ajouter une image
+**Claire** utilise KDE. Elle installe ses applications depuis Bazaar, et tout se met à jour sans rien lui demander. Les mises à jour de l'OS s'appliquent quand elle éteint ou redémarre. La seule chose à lui apprendre : si un jour le laptop démarre mal, choisir la deuxième ligne du menu de démarrage et m'appeler.
 
-Le nom de l'image (`IMAGE_NAME` dans `image-template.env`) est distinct de celui du repo pour qu'une autre image puisse s'y ajouter : il faudra alors un Containerfile par image et une matrice dans `.github/workflows/build.yml`.
+**Moi** :
+- un e-mail de GitHub si le build de la nuit échoue (la cause est presque toujours en amont : relancer le lendemain ou corriger `build.sh`) ;
+- de temps en temps, `rpm-ostree status` via Tailscale SSH, pour vérifier qu'elle a redémarré récemment et qu'aucune bidouille locale ne traîne ;
+- les dépannages, avec la méthode décrite plus bas.
+
+## Installer la machine
+
+À faire d'abord dans une VM (voir [Tester dans une VM](#tester-dans-une-vm)), puis sur le laptop.
+
+### 1. Installation d'Aurora
+
+1. ISO : <https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso>, avec son `-CHECKSUM` (`sha256sum -c`). Sur une clé USB (pas Ventoy, que les ISO Aurora ne supportent pas).
+2. BIOS du Framework : Secure Boot reste activé.
+3. Dans l'installeur :
+   - langue : français ;
+   - partitionnement automatique, **chiffrement coché** ;
+   - compte `claire`, nom affiché « Claire », administrateur, avec **la passphrase LUKS comme mot de passe**.
+
+   L'installeur et l'invite LUKS de l'ISO seraient en QWERTY quoi qu'on choisisse (rapporté par les testeurs d'Aurora, à confirmer en VM). Choisir une passphrase qui se tape pareil en QWERTY et en AZERTY, ou la taper en QWERTY jusqu'au passage sur notre image.
+4. Premier démarrage, écran bleu MOK : « Enroll MOK », mot de passe `universalblue`. Cela enregistre la clé Secure Boot d'Universal Blue.
+
+### 2. Passage sur cette image
+
+```sh
+sudo bootc switch ghcr.io/crocmagnon/aurora-claire:latest
+systemctl reboot
+```
+
+Au redémarrage : `rpm-ostree status` doit montrer `ghcr.io/crocmagnon/aurora-claire:latest` comme image démarrée.
+
+### 3. Réglages manuels, une seule fois
+
+Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent aux mises à jour, mais ne peuvent pas venir de l'image.
+
+- **Tailscale**, pour que je puisse dépanner :
+  ```sh
+  sudo tailscale up --ssh --operator=claire
+  ```
+  Puis, dans la console d'administration Tailscale, **désactiver l'expiration de la clé** de cette machine. Sinon, l'accès disparaît au bout de 180 jours.
+- **pCloud** : télécharger l'AppImage sur pcloud.com, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session. Puis synchroniser `~/Documents`, `~/Images` et `~/Bureau` : ses fichiers sont sauvegardés sans qu'elle ait à y penser. pCloud se met à jour lui-même, pas par uupd.
+- **Comptes** : Steam, Firefox Sync.
+- **Empreinte digitale** (si elle veut) : Configuration du système, Utilisateurs.
+- **Firmware** : `fwupdmgr refresh && fwupdmgr update`.
+
+### 4. Contrôles
+
+- `rpm-ostree status` : image `aurora-claire`, aucun paquet ajouté localement.
+- `rpm-ostree kargs` contient `amdgpu.dcdebugmask=0x10` et `vconsole.keymap=fr`.
+- Redémarrer : une passphrase en AZERTY, puis le bureau sans autre saisie.
+- Wallet ouvert à l'autologin : la commande suivante répond `b false` :
+  ```sh
+  busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/kdewallet org.freedesktop.Secret.Collection Locked
+  ```
+- `flatpak list --app` : Firefox, Steam, OnlyOffice, Gear Lever, KTailctl.
+
+## Modifier l'image
+
+```
+Containerfile                   FROM aurora:stable, puis build.sh
+build_files/build.sh            paquets et modifications par script
+system_files/                   copié tel quel à la racine de l'image
+  usr/lib/bootc/kargs.d/        paramètres du noyau (un .toml par sujet)
+  usr/lib/modprobe.d/           modules du noyau
+  usr/lib/systemd/system/       unités et drop-ins systemd
+  usr/share/flatpak/preinstall.d/   Flatpaks préinstallés
+  etc/                          seulement si le logiciel ne lit rien sous /usr
+image-template.env              nom et description de l'image
+.github/workflows/build.yml     build, publication, signature
+cosign.pub                      clé publique de signature
+```
+
+Règles :
+- **Préférer `/usr/lib` à `/etc`.** `/usr/lib/sysctl.d`, `/usr/lib/udev/rules.d`, `/usr/lib/systemd/...`, `/usr/lib/tmpfiles.d`, `/usr/share/polkit-1/rules.d` font autorité : l'image gagne toujours. Un fichier de `/etc` modifié sur la machine masquerait l'image pour toujours.
+- **Un paramètre du noyau = un fichier dans `kargs.d`**, appliqué au `bootc switch` et à chaque mise à jour.
+- **Un réglage repris d'`arch-config` cite son origine** en commentaire.
+- **Passer par une pull request** : le build est testé sans être publié. Le merge sur `main` publie l'image, que le laptop applique au redémarrage suivant.
+- Une modification de la configuration dracut doit reconstruire l'initramfs dans `build.sh`, comme le fait Aurora (`build_scripts/base/19-initramfs.sh` dans [ublue-os/aurora](https://github.com/ublue-os/aurora)).
+
+Suivre un build : `gh run watch`. Le relancer sans commit : `gh workflow run build.yml`.
+
+### Ajouter une image
+
+Pour une deuxième machine : un Containerfile par image (ex. `Containerfile.gab`) et une matrice dans `.github/workflows/build.yml`. Le `Justfile` lit le nom de l'image dans `image-template.env` : le passer en paramètre. Les réglages communs peuvent aller dans un `build_files/common.sh` appelé par chaque image.
+
+### Signature
+
+GitHub Actions signe chaque image avec cosign. La clé privée n'existe que dans le secret `SIGNING_SECRET` du dépôt. Pour la changer : `COSIGN_PASSWORD="" cosign generate-key-pair`, `gh secret set SIGNING_SECRET < cosign.key`, remplacer `cosign.pub`, effacer `cosign.key`. Un secret à versionner passerait par git-crypt.
+
+Le laptop ne vérifie pas encore la signature (il faudrait une politique dans `/etc/containers/policy.json`).
+
+## Corriger un problème sur la machine
+
+On ne sait pas toujours quel est le bon correctif avant de l'avoir essayé. D'où trois temps : bidouiller sur place, reporter dans l'image, nettoyer.
+
+### 1. Essayer sur place
+
+Via Tailscale SSH (`ssh claire@<nom-tailscale>`, ou `tailscale ssh`) :
+
+| À essayer | Commande | Durée de vie |
+|---|---|---|
+| un fichier dans `/usr` | `sudo bootc usr-overlay`, puis modifier | jusqu'au redémarrage |
+| un paquet | `sudo rpm-ostree install --apply-live <paquet>` | persistant, visible dans `rpm-ostree status` |
+| un réglage dans `/etc` | modifier directement | persistant |
+| un paramètre du noyau | `sudo rpm-ostree kargs --append=<karg>` | persistant |
+
+Les mises à jour continuent : les bidouilles persistantes sont rejouées par-dessus chaque nouvelle image. On peut donc laisser Claire utiliser la machine quelques jours pour voir si le correctif tient.
+
+### 2. Reporter dans l'image
+
+Voir [Modifier l'image](#modifier-limage). Pull request, merge, puis attendre que le laptop applique l'image (ou `sudo bootc upgrade` puis redémarrer).
+
+### 3. Nettoyer et vérifier
+
+```sh
+sudo rpm-ostree reset                  # retire paquets ajoutés et overrides locaux
+sudo rpm-ostree kargs --delete=<karg>  # si le karg est maintenant dans kargs.d
+sudo ostree admin config-diff          # tout ce qui diffère de l'image dans /etc
+rpm-ostree status                      # aucun « LayeredPackages » ni « LocalPackages »
+```
+
+Pour remettre un fichier de `/etc` à la version de l'image : le copier depuis `/usr/etc/`.
+
+Seules la dérive de `/etc` et les paquets ajoutés sont possibles : ces commandes les montrent entièrement.
+
+## Revenir en arrière
+
+- **À distance** : `sudo bootc rollback`, puis redémarrer. Le déploiement précédent redevient le défaut.
+- **Sur place** : au démarrage, choisir la deuxième entrée du menu.
+- **Garder une version sûre** : `sudo ostree admin pin 0` épingle le déploiement courant (il ne sera pas supprimé par les mises à jour). `sudo ostree admin pin --unpin <n>` pour le libérer.
+- **Revenir à Aurora d'origine** : `sudo bootc switch ghcr.io/ublue-os/aurora:stable`.
+
+## Tester dans une VM
+
+Sur une de mes machines Arch (libvirt, virt-manager, OVMF et swtpm viennent de `arch-config`). La VM `aurora-test` reproduit l'installation réelle : ISO Aurora, Secure Boot, puis `bootc switch`.
+
+```fish
+set -x LIBVIRT_DEFAULT_URI qemu:///system
+set d /var/lib/libvirt/images/aurora-test
+sudo mkdir -p $d; cd $d
+sudo curl -fLO https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso
+sudo curl -fLO https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso-CHECKSUM
+sha256sum -c aurora-stable-webui-x86_64.iso-CHECKSUM
+
+virsh net-start default   # si le réseau NAT est inactif
+virt-install --name aurora-test --osinfo fedora-unknown \
+    --memory 8192 --vcpus 6 --cpu host-passthrough --machine q35 \
+    --boot uefi,firmware.feature0.name=secure-boot,firmware.feature0.enabled=yes,firmware.feature1.name=enrolled-keys,firmware.feature1.enabled=yes \
+    --disk path=$d/disk.qcow2,size=64,format=qcow2,bus=virtio,discard=unmap \
+    --cdrom $d/aurora-stable-webui-x86_64.iso \
+    --network network=default --graphics spice --video virtio \
+    --noautoconsole
+virt-manager --connect qemu:///system --show-domain-console aurora-test
+```
+
+Puis suivre [Installer la machine](#installer-la-machine). Dans la VM, tester :
+- la passphrase à l'invite LUKS avec des lettres qui changent de place entre QWERTY et AZERTY (a, q, z, w, m) ;
+- l'autologin et le wallet ouvert ;
+- les Flatpaks préinstallés ;
+- un `bootc rollback`.
+
+Ce qui ne se teste pas en VM : le matériel du Framework (PSR, audio, empreinte, veille).
+
+Pour tester une modification de l'image avant de la publier : pousser une branche et ouvrir une pull request (le build vérifie que l'image se construit), ou publier temporairement un tag `:testing` et faire `sudo bootc switch ghcr.io/crocmagnon/aurora-claire:testing` dans la VM.
+
+Repartir de zéro :
+```fish
+virsh destroy aurora-test; virsh undefine aurora-test --nvram
+sudo rm -f /var/lib/libvirt/images/aurora-test/disk.qcow2
+```
+
+## Aide-mémoire
+
+| Je veux… | Commande (sur le laptop) |
+|---|---|
+| voir l'image et les déploiements | `rpm-ostree status` ou `sudo bootc status` |
+| forcer la mise à jour maintenant | `sudo bootc upgrade` puis redémarrer (ou `ujust update`) |
+| revenir à l'image précédente | `sudo bootc rollback` puis redémarrer |
+| voir la dérive de `/etc` | `sudo ostree admin config-diff` |
+| retirer les paquets ajoutés localement | `sudo rpm-ostree reset` |
+| voir ou changer les paramètres du noyau | `rpm-ostree kargs`, `sudo rpm-ostree kargs --append=… / --delete=…` |
+| rendre `/usr` modifiable jusqu'au redémarrage | `sudo bootc usr-overlay` |
+| voir les journaux de mise à jour | `journalctl -u uupd` |
+| lister les commandes Aurora | `ujust` |
