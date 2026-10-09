@@ -48,8 +48,9 @@ ce dépôt, GitHub Actions             FROM aurora:stable + nos réglages
 ghcr.io/crocmagnon/aurora-claire:latest
         │
         ▼
-le laptop, timer uupd               bootc upgrade (prépare le déploiement),
-                                    flatpak update, brew upgrade
+le laptop, uupd.timer               chaque jour à 4h (heure locale), ou au réveil
+                                    → bootc upgrade (prépare le déploiement),
+                                      flatpak update, brew upgrade
         │
         ▼
 redémarrage suivant                 nouvelle image, l'ancienne reste disponible
@@ -60,6 +61,36 @@ redémarrage suivant                 nouvelle image, l'ancienne reste disponible
 - Une pull request construit l'image sans la publier : c'est la façon de tester une modification sans l'envoyer au laptop.
 - Les Flatpaks se mettent à jour à part, sans redémarrage.
 - Si Claire ne redémarre jamais, la mise à jour attend. Elle s'applique au prochain redémarrage.
+
+### Les mises à jour automatiques sur le laptop (uupd)
+
+[uupd](https://github.com/ublue-os/uupd) est l'outil de mise à jour d'Universal Blue, fourni et activé par Aurora. Rien n'est réglé dans ce dépôt.
+
+**Quand.** `uupd.timer` (`/usr/lib/systemd/system/uupd.timer`) lance `uupd.service` :
+- chaque jour à **4h00, heure locale**, avec un délai aléatoire de 0 à 15 min ;
+- `Persistent=true` : si le laptop était éteint ou en veille à 4h, la mise à jour part **dès le démarrage ou le réveil suivant**. En pratique, c'est le cas le plus courant.
+
+**À quelles conditions.** Avant de commencer, uupd vérifie que la machine est disponible (`uupd config-dump`, section `checks.hardware`) :
+- batterie à 20 % au moins (sur secteur, pas de condition) ;
+- processeur occupé à moins de 50 %, mémoire à moins de 90 % ;
+- réseau peu utilisé (moins de 700 Ko/s) : pas de mise à jour en pleine visio.
+
+Si une condition manque, il ne fait rien et attend le lendemain. En cas d'échec (Wi-Fi pas encore connecté au réveil, par exemple), systemd le relance au bout d'une minute, trois fois au plus.
+
+**Ce qu'il met à jour**, dans l'ordre :
+1. **le système** : `bootc upgrade` télécharge notre image si elle a changé et prépare le nouveau déploiement. Rien ne change avant le redémarrage suivant, et uupd ne redémarre jamais tout seul ;
+2. **les Flatpaks** (système et utilisateur), appliqués tout de suite ; une application ouverte passe à la nouvelle version à sa prochaine ouverture ;
+3. **Homebrew**, s'il est utilisé.
+
+Distrobox est exclu par Aurora (`/etc/uupd/config.json`).
+
+**Suivre et intervenir :**
+- `systemctl list-timers uupd.timer` : prochaine et dernière exécution ;
+- `journalctl -u uupd.service` : ce qu'il a fait (JSON) ;
+- `rpm-ostree status` : un déploiement préparé apparaît au-dessus de l'actuel ;
+- `ujust update` : tout mettre à jour tout de suite ;
+- `ujust toggle-updates` : vérifier qu'elles sont actives (elles doivent le rester) ;
+- `sudo uupd update-check` : y a-t-il une image plus récente ?
 
 ### Où s'installent les applications
 
@@ -377,6 +408,7 @@ Après un `rebase-helper` ou un `toggle-devmode` par erreur : `sudo bootc switch
 | retirer les paquets ajoutés localement | `sudo rpm-ostree reset` |
 | voir ou changer les paramètres du noyau | `rpm-ostree kargs`, `sudo rpm-ostree kargs --append=… / --delete=…` |
 | rendre `/usr` modifiable jusqu'au redémarrage | `sudo bootc usr-overlay` |
-| voir les journaux de mise à jour | `journalctl -u uupd` |
+| voir les journaux de mise à jour | `journalctl -u uupd.service` |
+| prochaine mise à jour automatique | `systemctl list-timers uupd.timer` |
 | lister les commandes Aurora | `ujust` (voir [ujust](#ujust)) |
 | voir la dérive de `/etc`, version lisible | `ujust check-local-overrides` |
