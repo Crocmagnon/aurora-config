@@ -76,6 +76,8 @@ Sibling repos, same owner:
 - uupd (1.4): `uupd.timer` daily at 04:00 local + up to 15 min random, `Persistent=true`; `uupd.service` runs `uupd --log-level=debug --json`, `Restart=on-failure` (60 s, 3 tries / 10 min). Hardware checks enabled by default config (logic in `checks/hardware.go` of ublue-os/uupd): on battery only, ≥ 20 % and power profile not `power-saver`; CPU < 50 %, memory < 90 %; network fully connected, not metered (NM `Metered` yes/guess-yes blocks), < 700 kB/s averaged over 5 s. Modules: system (bootc), flatpak, brew; distrobox disabled by Aurora's `/etc/uupd/config.json`. It never reboots (no `--apply`). Inspect with `uupd config-dump`.
 - `ujust` recipes live in `/usr/share/ublue-os/just/*.just` (read them there before recommending one). `rebase-helper` and `toggle-devmode` rebase to another Aurora image, leaving `aurora-claire`; `toggle-tailscale` cuts remote access; `toggle-tpm2` contradicts a decision below. `check-local-overrides` diffs `/etc` against `/usr/etc` (drift check).
 
+- On the laptop (2026-10-10): installed, switched to the signed image, display (PSR karg) and audio (ACP blacklist) OK, Tailscale SSH as `gaugendre` OK.
+
 ## Decisions (do not revisit without the user)
 
 - **Secure Boot on, no hibernation.** Fedora kernels enter lockdown under Secure Boot, which disables hibernation. Suspend only.
@@ -88,7 +90,7 @@ Sibling repos, same owner:
 
 ## Not yet verified (check in the VM, then on the laptop)
 
-- On real hardware: PSR karg, ACP blacklist, suspend, fingerprint, `steam-devices` with a controller, PowerDevil's critical-battery action without hibernation (expected: shutdown).
+- On real hardware: suspend, fingerprint, `steam-devices` with a controller, PowerDevil's critical-battery action without hibernation (expected: shutdown).
 - Whether `ttf-ms-fonts`-style fonts matter for OnlyOffice document fidelity (the Flatpak bundles its own fonts; not checked).
 
 Move each item to the facts or rules above once checked, with the date.

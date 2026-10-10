@@ -2,6 +2,8 @@
 
 Système du Framework 13 AMD (Ryzen AI 300) de Claire, décrit dans ce dépôt sous forme d'**image bootc** : [Aurora](https://getaurora.dev) (Fedora Atomic avec KDE Plasma) plus quelques réglages. Le dépôt part de [ublue-os/image-template](https://github.com/ublue-os/image-template).
 
+> **État (10/10/2026).** Laptop installé et livré : image signée active, autologin et wallet, Tailscale SSH, écran et son vérifiés. Reste à vérifier sur le matériel : veille, batterie critique, manette. Banc de test (VM `aurora-test` et registre local) conservé pour les prochaines modifications.
+
 Les dépôts voisins :
 - [`arch-config`](https://codeberg.org/Crocmagnon/arch-config) : mes machines Arch (decman). Les réglages propres au Framework 13 AMD en viennent ;
 - `nixos-config` : srv-1.
