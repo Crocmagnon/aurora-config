@@ -66,6 +66,7 @@ Sibling repos, same owner:
 - `bootc switch` to the local registry image works; the upstream deployment stays as rollback.
 - Signature enforcement (2026-10-10): `bootc switch --enforce-container-sigpolicy ghcr.io/crocmagnon/aurora-claire:latest` succeeds from our booted image (origin becomes `ostree-image-signed:docker://…`); `skopeo copy` with a policy pointing at the wrong key fails with « invalid signature ». The GHCR image is anonymously pullable.
 - KTailctl autostarts from `/etc/xdg/autostart`; `aurora-config-grub.service` reports `inactive` (not failed).
+- Validated by the user in the VM (2026-10-10): Tailscale SSH as `gaugendre` then `sudo -i` (no SELinux issue), installing an app from Bazaar as Claire, pCloud AppImage through Gear Lever, `bootc rollback`.
 
 - GRUB comes from bootupd's static config, written to `/boot/grub2/grub.cfg` at install (not updated by image upgrades): `timeout_style=menu`, `timeout=1`, then it sources `$prefix/custom.cfg` last. `/boot` is outside the image and mounted rw, so `aurora-config-grub.service` copies `usr/lib/aurora-config/grub-custom.cfg` and the Breeze theme there at every boot (effect at the next boot; files get `boot_t`). The theme (`grub2-breeze-theme`, which installs into `/boot`) is extracted at build with `rpm2cpio` into `/usr/lib/aurora-config/grub-themes/`. It renders under Secure Boot. Its Unifont fonts are ASCII-only: the user chose not to translate the theme. Entry titles (`Aurora (Version: …) (ostree:N)`) come from ostree and stay as is.
 

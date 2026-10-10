@@ -387,6 +387,8 @@ Puis suivre [Installer la machine](#installer-la-machine). Dans la VM, tester :
 - la vérification de signature (`--enforce-container-sigpolicy`, voir l'installation) ;
 - le dépannage : compte `gaugendre`, `tailscale up`, puis `ssh gaugendre@<nom-tailscale>` et `sudo -i` depuis l'hôte.
 
+Tout ce qui précède a été validé dans la VM les 9 et 10/10/2026.
+
 Ce qui ne se teste pas en VM : le matériel du Framework (PSR, audio, empreinte, veille).
 
 Pour tester une modification avant de la publier, la VM suit l'image locale via un petit registre sur l'hôte, joignable seulement depuis l'hôte (`127.0.0.1`) et le réseau des VM (`192.168.122.1`). Docker refuse de pousser en HTTP ailleurs que vers `localhost`, d'où les deux adresses.
