@@ -217,15 +217,20 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
   sudo useradd -m -G wheel gaugendre && sudo passwd gaugendre
   ```
   Il n'apparaît pas au démarrage (autologin), seulement dans « Changer d'utilisateur ».
-- **Tailscale**, pour que je puisse dépanner. Mêmes options que sur mes machines (`arch-config`), connecté avec **mon** compte Tailscale :
+- **Tailscale**, pour que je puisse dépanner. Mêmes options que sur mes machines (`arch-config`) ; se connecter avec le compte Tailscale de Claire (ou le mien, peu importe : le tag remplace le compte) :
   ```sh
   sudo tailscale up --operator=claire --ssh --accept-routes --accept-dns
   ```
   - `--operator=claire` : Claire pilote Tailscale sans `sudo`, ce qu'il faut à KTailctl. Un seul opérateur possible : moi, j'utilise `sudo tailscale …` depuis mon compte administrateur ;
-  - `--ssh` : tailscaled sert lui-même SSH, sans serveur SSH sur la machine. Les règles `ssh` du tailnet doivent autoriser l'utilisateur `gaugendre` sur cette machine (la règle par défaut, `autogroup:self` vers `autogroup:nonroot`, le permet si la machine est enregistrée sur mon compte) ;
+  - `--ssh` : tailscaled sert lui-même SSH, sans serveur SSH sur la machine ;
   - `--accept-routes`, `--accept-dns` : routes et DNS du tailnet, comme sur mes machines.
 
-  Puis, dans la console d'administration Tailscale, **désactiver l'expiration de la clé** de cette machine. Sinon, l'accès disparaît au bout de 180 jours.
+  Puis, dans la console d'administration Tailscale : **Machines → framework-claire → Edit ACL tags → `tag:claire`**. Pourquoi un tag :
+  - Tailscale n'autorise le SSH vers la machine d'un autre utilisateur que si elle est taguée, même pour un administrateur. Sans tag, `ssh gaugendre@framework-claire` répond « tailnet policy does not permit you to SSH to this node » ;
+  - la machine ne dépend plus d'aucun compte : ses droits sont ceux du tag, ni ceux de Claire, ni les miens (administrateur : accès à tout le tailnet) ;
+  - l'expiration de la clé est désactivée d'office sur une machine taguée.
+
+  La politique du tailnet porte les règles correspondantes : `tag:claire` dans `tagOwners`, une règle `ssh` `autogroup:admin` → `tag:claire` pour `autogroup:nonroot` (pas root : je passe par `sudo`), `tag:claire` ajouté aux sources de la règle `grants` des services web de la maison, et un `sshTests` qui le vérifie.
 - **KTailctl réduit** : l'image le lance à l'ouverture de session. Dans KTailctl → Paramètres, cocher « Démarrer réduit » : il se lance alors dans la zone de notification, sans fenêtre. Ce réglage vit dans le dossier de Claire, d'où l'étape manuelle.
 - **pCloud** : télécharger l'AppImage sur pcloud.com, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session. Puis synchroniser `~/Documents`, `~/Images` et `~/Bureau` : ses fichiers sont sauvegardés sans qu'elle ait à y penser. pCloud se met à jour lui-même, pas par uupd.
 - **Comptes** : Steam, Firefox Sync.
