@@ -12,7 +12,7 @@ Sibling repos, same owner:
 
 ## How it ships
 
-- `.github/workflows/build.yml` builds on every push to `main`, nightly (00:05 UTC, before the laptop's 04:00-local uupd run; GitHub may delay scheduled runs) and on pull requests. PRs build but never publish. Changes touching only `*.md`, `.github/renovate.json` or `LICENSE` trigger nothing (`paths-ignore`, a YAML anchor shared by `push` and `pull_request`): keep that list to files that never reach the image.
+- `.github/workflows/build.yml` builds on every push to `main`, nightly (00:05 UTC, before the laptop's 04:00-local uupd run; GitHub delays scheduled runs, by 5.5 h on 2026-10-10) and on pull requests. PRs build but never publish. Changes touching only `*.md`, `.github/renovate.json` or `LICENSE` trigger nothing (`paths-ignore`, a YAML anchor shared by `push` and `pull_request`): keep that list to files that never reach the image.
 - On `main`, it pushes `ghcr.io/crocmagnon/aurora-claire:latest` and signs it with cosign (secret `SIGNING_SECRET`; public key `system_files/usr/lib/pki/containers/aurora-claire.pub`). The laptop enforces that signature once switched with `--enforce-container-sigpolicy`: `build.sh` adds a `sigstoreSigned` entry to `/etc/containers/policy.json`, `etc/containers/registries.d/aurora-claire.yaml` enables sigstore attachments (same scheme as Aurora's `ublue-os`). Key rotation: add the new key to `keyPaths` and ship it before switching the secret (README « Signature »).
 - **GitHub disables scheduled workflows after 60 days without repository activity** (public repo). Decision: document only (README « Au quotidien »), no keepalive; revisit if it becomes a chore.
 - The laptop runs `bootc switch`ed to that image. uupd stages updates; they apply at next reboot.

@@ -56,7 +56,8 @@ le laptop, uupd.timer               chaque jour à 4h (heure locale), ou au rév
 redémarrage suivant                 nouvelle image, l'ancienne reste disponible
 ```
 
-- Le laptop suit **notre** image, pas celle d'Universal Blue. Il reçoit leurs mises à jour au plus tard le lendemain, via notre build de la nuit.
+- Le laptop suit **notre** image, pas celle d'Universal Blue. Il reçoit leurs mises à jour via notre build de la nuit, en général le lendemain.
+- **GitHub ne garantit pas l'heure des builds planifiés** : celui de 0h05 UTC peut partir plusieurs heures plus tard (5h39 UTC le 10/10/2026). Le laptop, s'il est allumé à 4h, prend alors l'image de la veille ; en pratique, il est souvent en veille à 4h et se met à jour au réveil. Pour un correctif urgent, un push sur `main` (ou `gh workflow run build.yml`) reconstruit tout de suite.
 - **Un build qui échoue ne publie rien** : le laptop garde la dernière image. GitHub envoie un e-mail.
 - Une pull request construit l'image sans la publier : c'est la façon de tester une modification sans l'envoyer au laptop.
 - Les Flatpaks se mettent à jour à part, sans redémarrage.
