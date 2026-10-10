@@ -411,7 +411,9 @@ docker build -f Containerfile -t localhost:5000/aurora-claire . && docker push l
 sudo bootc upgrade && systemctl reboot
 ```
 
-Revenir ensuite sur l'image publiée : `sudo bootc switch ghcr.io/crocmagnon/aurora-claire:latest`.
+La vérification de signature ne gêne pas ce banc : la politique ne vise que `ghcr.io/crocmagnon/aurora-claire`, et un `switch` sans `--enforce-container-sigpolicy` vers le registre local reste possible même depuis un déploiement vérifié (testé le 10/10/2026).
+
+Revenir ensuite sur l'image publiée : `sudo bootc switch --enforce-container-sigpolicy ghcr.io/crocmagnon/aurora-claire:latest`.
 
 Repartir de zéro :
 ```fish
