@@ -182,7 +182,7 @@ Désynchronisés, rien ne casse : l'autologin passe quand même, mais le wallet 
 1. ISO : <https://dl.getaurora.dev/aurora-stable-webui-x86_64.iso>, avec son `-CHECKSUM` (`sha256sum -c`). Sur une clé USB (pas Ventoy, que les ISO Aurora ne supportent pas).
 2. BIOS du Framework : Secure Boot reste activé.
 3. Dans l'installeur :
-   - langue : français ; clavier : `fr (oss)`, proposé par défaut (mêmes lettres et chiffres que `fr`) ;
+   - langue : français ; clavier : choisir `fr` (l'installeur propose `fr (oss)` par défaut : mêmes lettres et chiffres, mais autant être cohérent). Il règle à la fois les consoles texte et, par un paramètre du noyau, l'invite LUKS. Pour corriger après coup : `sudo localectl set-keymap --no-convert fr` et `sudo rpm-ostree kargs --replace=vconsole.keymap=fr`, puis redémarrer ;
    - partitionnement automatique (`/boot/efi`, `/boot` en clair, puis une partition LUKS en btrfs avec `/`, `/home` et `/var`), **chiffrement coché** ;
    - passphrase : lettres, chiffres et symboles courants, sans AltGr (les variantes d'AZERTY ne diffèrent que là). Vérifier avec l'icône en forme d'œil qu'elle s'affiche comme prévu.
 
@@ -240,7 +240,7 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
 ### 4. Contrôles
 
 - `rpm-ostree status` : image `ostree-image-signed:…aurora-claire`, aucun paquet ajouté localement.
-- `rpm-ostree kargs` contient `amdgpu.dcdebugmask=0x10`, et `vconsole.keymap=fr-oss` (posé par l'installeur).
+- `rpm-ostree kargs` contient `amdgpu.dcdebugmask=0x10`, et une seule fois `vconsole.keymap=fr` (posé par l'installeur) ; `localectl status` affiche `VC Keymap: fr` et `X11 Layout: fr`.
 - Redémarrer : une passphrase en AZERTY, puis le bureau sans autre saisie.
 - Wallet ouvert à l'autologin : la commande suivante répond `b false` :
   ```sh
