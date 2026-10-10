@@ -26,7 +26,7 @@ grep -q '^auth.*pam_systemd_loadkey\.so' "$pam"
 ! test -e /etc/pam.d/plasmalogin-autologin
 cat "$pam"
 
-# Menu GRUB visible 5 s (voir le service).
+# Menu GRUB visible quelques secondes (voir le service).
 systemctl enable aurora-config-grub.service
 
 # Thème Breeze de KDE pour GRUB. Le paquet s'installe dans /boot, hors de l'image : on l'extrait
