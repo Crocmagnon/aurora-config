@@ -235,7 +235,7 @@ Ces réglages vivent dans `/var` ou dans le dossier de Claire : ils survivent au
 - **KTailctl réduit** : l'image le lance à l'ouverture de session. Dans KTailctl → Paramètres, cocher « Démarrer réduit » : il se lance alors dans la zone de notification, sans fenêtre. Ce réglage vit dans le dossier de Claire, d'où l'étape manuelle.
 - **pCloud** : télécharger l'AppImage sur pcloud.com, l'ouvrir avec Gear Lever, se connecter, activer le démarrage avec la session. Puis synchroniser `~/Documents`, `~/Images` et `~/Bureau` : ses fichiers sont sauvegardés sans qu'elle ait à y penser. pCloud se met à jour lui-même, pas par uupd.
 - **Comptes** : Steam, Firefox Sync.
-- **Empreinte digitale** (si elle veut) : Configuration du système, Utilisateurs.
+- **Empreinte digitale** (si elle veut) : Configuration du système, Utilisateurs. Le capteur Goodix garde les empreintes **en lui-même**, pas sur le disque : celles d'une installation précédente y restent, et le capteur refuse de réenregistrer le même doigt (le dernier appui ne ferme pas le cercle ; `journalctl -u fprintd` : « Finger was already enrolled as 'FP1-…' »). `fprintd-delete` n'efface que ce que le système connaît : passer par libfprint en Python (`FPrint.Device.list_prints_sync()` puis `delete_print_sync()`, en root, `fprintd` arrêté).
 - **Firmware** : `fwupdmgr refresh && fwupdmgr update`.
 
 ### 4. Contrôles
