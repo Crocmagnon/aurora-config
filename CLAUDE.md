@@ -7,7 +7,7 @@ Guidance for Claude Code in this repository. Keep it and `README.md` current: up
 A bootc image for Claire's Framework 13 AMD (Ryzen AI 300): `FROM ghcr.io/ublue-os/aurora:stable` (Fedora Atomic, KDE Plasma) plus a few settings. Claire is not technical: she only uses the desktop and the Bazaar store. The user (Gabriel) administers the machine remotely over Tailscale SSH, with his own admin account `gaugendre`.
 
 Sibling repos, same owner:
-- `~/Projects/codeberg.org/Crocmagnon/arch-config`: his Arch machines (decman). Framework-specific settings come from there; read its `CLAUDE.md` and `decman/framework_gab_amd.py` before adding hardware tweaks.
+- `~/Projects/github.com/Crocmagnon/arch-config`: his Arch machines (decman). Framework-specific settings come from there; read its `CLAUDE.md` and `decman/framework_gab_amd.py` before adding hardware tweaks.
 - `nixos-config`: srv-1. Never touch it.
 
 ## How it ships
