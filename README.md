@@ -303,7 +303,7 @@ Pour une deuxième machine : un Containerfile par image (ex. `Containerfile.gab`
 
 GitHub Actions signe chaque image avec cosign. La clé privée n'existe que dans le secret `SIGNING_SECRET` du dépôt ; la clé publique est `system_files/usr/lib/pki/containers/aurora-claire.pub`. Un secret à versionner passerait par git-crypt.
 
-Le laptop vérifie la signature, comme Aurora le fait pour ses propres images : `build.sh` ajoute à `/etc/containers/policy.json` une entrée `sigstoreSigned` pour `ghcr.io/crocmagnon/aurora-claire`, et `registries.d/aurora-claire.yaml` indique où trouver les signatures. La vérification est active une fois le laptop basculé avec `--enforce-container-sigpolicy` (voir [Passage sur cette image](#2-passage-sur-cette-image)). Une image mal signée est refusée : le laptop reste sur l'image actuelle, rien ne casse.
+Le laptop vérifie la signature, comme Aurora le fait pour ses propres images : `build.sh` ajoute à `/usr/share/containers/policy.json` une entrée `sigstoreSigned` pour `ghcr.io/crocmagnon/aurora-claire`, et `registries.d/aurora-claire.yaml` indique où trouver les signatures. La vérification est active une fois le laptop basculé avec `--enforce-container-sigpolicy` (voir [Passage sur cette image](#2-passage-sur-cette-image)). Une image mal signée est refusée : le laptop reste sur l'image actuelle, rien ne casse.
 
 **Changer de clé** sans bloquer les mises à jour, en deux temps :
 1. `COSIGN_PASSWORD="" cosign generate-key-pair`, ajouter la nouvelle clé publique à côté de l'ancienne (`aurora-claire-2.pub`) et dans `keyPaths` (`build.sh`), publier, et attendre que le laptop ait appliqué cette image ;
