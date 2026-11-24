@@ -23,7 +23,7 @@ pam=/usr/lib/pam.d/plasmalogin-autologin
 sed -i '/^auth\s\+include\s\+postlogin/i auth        optional    pam_systemd_loadkey.so\n-auth       optional    pam_kwallet5.so' "$pam"
 grep -q '^auth.*pam_systemd_loadkey\.so' "$pam"
 # Un fichier du même nom dans /etc/pam.d aurait priorité et rendrait ce correctif inopérant.
-! test -e /etc/pam.d/plasmalogin-autologin
+test ! -e /etc/pam.d/plasmalogin-autologin
 cat "$pam"
 
 # Menu GRUB visible quelques secondes (voir le service).
@@ -39,16 +39,19 @@ mv /tmp/breeze/boot/grub2/themes/breeze /usr/lib/aurora-config/grub-themes/
 
 # Vérification de la signature de notre image par le laptop, comme Aurora le fait pour les siennes :
 # clé publique sous /usr/lib/pki/containers, entrée sigstoreSigned dans policy.json (fichier du
-# paquet containers-common, modifié plutôt que copié). Prend effet après un
-# `bootc switch --enforce-container-sigpolicy` (README).
+# paquet containers-common, modifié plutôt que copié). Absent de /etc/containers depuis novembre 2026,
+# il est sous /usr/share/containers ; un /etc/containers/policy.json le masquerait. Prend
+# effet après un `bootc switch --enforce-container-sigpolicy` (README).
+policy=/usr/share/containers/policy.json
 jq '.transports.docker["ghcr.io/crocmagnon/aurora-claire"] = [{
       "type": "sigstoreSigned",
       "keyPaths": ["/usr/lib/pki/containers/aurora-claire.pub"],
       "signedIdentity": {"type": "matchRepository"}
-    }]' /etc/containers/policy.json > /tmp/policy.json
-mv /tmp/policy.json /etc/containers/policy.json
-chmod 644 /etc/containers/policy.json
-jq -e '.transports.docker["ghcr.io/crocmagnon/aurora-claire"][0].type == "sigstoreSigned"' /etc/containers/policy.json
+    }]' "$policy" > /tmp/policy.json
+mv /tmp/policy.json "$policy"
+chmod 644 "$policy"
+jq -e '.transports.docker["ghcr.io/crocmagnon/aurora-claire"][0].type == "sigstoreSigned"' "$policy"
+test ! -e /etc/containers/policy.json
 
 # Pas de clavier virtuel : Fedora (kde-settings) fait de plasma-keyboard la méthode de saisie de
 # KWin, pensée pour les écrans tactiles. Le Framework 13 n'en a pas, et à l'écran de verrouillage
@@ -58,5 +61,5 @@ jq -e '.transports.docker["ghcr.io/crocmagnon/aurora-claire"][0].type == "sigsto
 kwinrc=/usr/share/kde-settings/kde-profile/default/xdg/kwinrc
 sed -i -e '/^InputMethod\[\$e\]=.*org\.kde\.plasma\.keyboard\.desktop$/d' \
        -e 's/^VirtualKeyboardEnabled=true$/VirtualKeyboardEnabled=false/' "$kwinrc"
-! grep -q '^InputMethod' "$kwinrc"
+if grep -q '^InputMethod' "$kwinrc"; then exit 1; fi
 grep -q '^VirtualKeyboardEnabled=false$' "$kwinrc"
