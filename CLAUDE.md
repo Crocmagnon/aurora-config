@@ -65,6 +65,7 @@ Sibling repos, same owner:
 
 - Autologin works from `/usr/lib/plasmalogin/plasmalogin.conf.d/autologin.conf`.
 - The wallet unlocks at autologin with the LUKS passphrase under Fedora's dracut initramfs and SELinux: the PAM audit line lists `pam_systemd_loadkey` among grantors, `pam_kwallet5` runs in `auth`, `plasma-kwallet-pam.service` starts, and the Secret Service `Locked` property is `false` on a wallet created earlier with the user's password.
+- Aurora's `hwe.preinstall` forces `org.freedesktop.Platform.VAAPI.Intel//25.08` on every machine; on this AMD laptop flatpak autoprunes it (`autoprune-unless = have-intel-gpu`) and preinstall puts it back, so each `flatpak update` flips 25.08/26.08 and uupd's per-user pass fails (polkit denies system changes to `claire`). `build.sh` deletes that section (2026-11-26), failing if it stays.
 - `claire.preinstall` installs its five Flatpaks on the first boot after the switch (`flatpak-preinstall.service`), on top of the Flatpaks the ISO installs.
 - `bootc switch` to the local registry image works; the upstream deployment stays as rollback.
 - Signature enforcement (2026-10-10): `bootc switch --enforce-container-sigpolicy ghcr.io/crocmagnon/aurora-claire:latest` succeeds from our booted image (origin becomes `ostree-image-signed:docker://…`); `skopeo copy` with a policy pointing at the wrong key fails with « invalid signature ». The GHCR image is anonymously pullable.
