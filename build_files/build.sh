@@ -53,6 +53,15 @@ chmod 644 "$policy"
 jq -e '.transports.docker["ghcr.io/crocmagnon/aurora-claire"][0].type == "sigstoreSigned"' "$policy"
 test ! -e /etc/containers/policy.json
 
+# Pas d'extension VAAPI Intel : le hwe.preinstall d'Aurora la force partout, pour Firefox sur
+# Intel. Ce laptop est AMD : l'extension y est inutile, et flatpak, qui la supprime faute de GPU
+# Intel (autoprune-unless), la réinstallait à chaque mise à jour ; la passe uupd faite au nom de
+# Claire échouait alors (flatpak/flatpak#6650, #6927). Fichier d'Aurora, modifié plutôt que
+# copié ; build en échec si la section reste.
+hwe=/usr/share/flatpak/preinstall.d/hwe.preinstall
+sed -i '/^\[Flatpak Preinstall org\.freedesktop\.Platform\.VAAPI\.Intel\]$/,/^$/d' "$hwe"
+if grep -q 'VAAPI\.Intel\]' "$hwe"; then exit 1; fi
+
 # Pas de clavier virtuel : Fedora (kde-settings) fait de plasma-keyboard la méthode de saisie de
 # KWin, pensée pour les écrans tactiles. Le Framework 13 n'en a pas, et à l'écran de verrouillage
 # cette méthode de saisie perd la Maj envoyée avec la touche par un clavier USB qui émule
